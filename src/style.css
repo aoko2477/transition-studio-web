@@ -332,6 +332,10 @@ button:disabled { opacity: .42; cursor: not-allowed; }
 .frame-timeline button.active { outline: 2px solid #fff; }
 .export-dimensions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .field-help { display: block; margin: -2px 0 10px; color: #98a4ac; font-size: 11px; line-height: 1.5; }
+.local-output-control { display: grid; gap: 8px; padding: 10px; border: 1px solid #3d4a50; background: #1f272b; }
+.local-output-control .field-help { margin: 0; }
+.local-output-control button { justify-self: start; }
+:root[data-theme="light"] .local-output-control { border-color: #adbdc2; background: #e7f0f2; }
 .set-preview { margin: 12px 0; padding: 10px; border: 1px solid #3f4d51; background: #171d20; }
 .set-preview-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .set-preview-toolbar button { padding: 6px 9px; font-size: 11px; }

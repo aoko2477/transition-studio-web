@@ -20,7 +20,7 @@ app.innerHTML = `
       <h1>Transition Studio</h1>
       <p>トランジション素材の作成・検査・容量最適化</p>
     </div>
-    <span class="badge">v0.2 Beta</span>
+    <span id="editionBadge" class="badge">v0.2 Beta</span>
   </header>
 
   <nav class="tabs" aria-label="主要機能">
@@ -296,6 +296,16 @@ app.innerHTML = `
           <h2>書き出し</h2>
           <label title="用途に合う保存形式を選びます。CCFOLIAではOUT・HOLD・INをまとめた3素材セットがおすすめです。">形式 <select id="exportFormat"><option value="webp">Animated WebP</option><option value="ccfset-webp" selected>3素材セット・Animated WebP（ZIP）</option><option value="apng">APNG</option><option value="ccfset-apng">3素材セット・APNG（ZIP）</option><option value="pngzip">PNG連番（ZIP）</option><option id="webmOption" value="webm" disabled>WebM（ローカル版に実装予定）</option></select></label>
           <div id="formatCompatibility" class="note"></div>
+          <div id="localOutputControl" class="local-output-control" hidden>
+            <label title="ローカル版では、ZIPやブラウザのダウンロードを介さず、選択したフォルダへファイルを直接保存できます。">保存方法
+              <select id="exportDestination">
+                <option value="download" selected>ブラウザからダウンロード</option>
+                <option value="folder">選択フォルダへ直接保存（ZIPなし）</option>
+              </select>
+            </label>
+            <button id="chooseExportDirectory" type="button">出力先フォルダを選択</button>
+            <small id="exportDirectoryStatus" class="field-help">出力時にフォルダを選択します。同名ファイルは上書きせず連番を付けます。</small>
+          </div>
           <label title="出力先に合わせた幅・高さをまとめて設定します。軽量プリセットは容量を抑えたい場合に向きます。">解像度プリセット <select id="resolutionPreset"><option value="1920x1080">Full HD・1920×1080</option><option value="1280x720">HD・1280×720</option><option value="960x540" selected>軽量16:9・960×540</option><option value="640x360">小型16:9・640×360</option><option value="3840x2160">4K・3840×2160</option><option value="1080x1080">正方形・1080×1080</option><option value="1000x1000">正方形・1000×1000</option><option value="custom">カスタム</option></select></label>
           <div class="export-dimensions"><label title="書き出す画像の横幅です。大きいほど細部を保てますが容量が増えます。">幅 <input id="exportWidth" type="number" min="64" max="3840" step="2" value="960"></label><label title="書き出す画像の高さです。大きいほど細部を保てますが容量が増えます。">高さ <input id="exportHeight" type="number" min="64" max="2160" step="2" value="540"></label><label title="1秒あたりのフレーム数です。30fpsは容量とのバランス、60fpsは滑らかさを優先します。">FPS <input id="exportFps" type="number" min="5" max="60" value="30"></label></div>
           <small class="field-help" title="FPSを上げるほどフレーム数が増えるため、同じ画質・解像度ではファイル容量も増えやすくなります。">30fps：標準・容量を抑えやすい ／ 60fps：よりなめらか・容量増</small>
@@ -1875,6 +1885,12 @@ function downloadBlob(blob, filename) {
 }
 
 const exportFormat = document.querySelector("#exportFormat");
+const webmOption = document.querySelector("#webmOption");
+const editionBadge = document.querySelector("#editionBadge");
+const localOutputControl = document.querySelector("#localOutputControl");
+const exportDestination = document.querySelector("#exportDestination");
+const chooseExportDirectory = document.querySelector("#chooseExportDirectory");
+const exportDirectoryStatus = document.querySelector("#exportDirectoryStatus");
 const exportWidth = document.querySelector("#exportWidth");
 const exportHeight = document.querySelector("#exportHeight");
 const exportFps = document.querySelector("#exportFps");
@@ -1904,6 +1920,8 @@ const setPreviewDirection = document.querySelector("#setPreviewDirection");
 const setPreviewPlay = document.querySelector("#setPreviewPlay");
 let setPreviewAnimationFrame = 0;
 let lastExport = null;
+let exportDirectoryHandle = null;
+let localEditionAvailable = false;
 
 function ccfSetOpacity() {
   if (["split", "stripe"].includes(effectiveKind())) return 1;
@@ -1978,7 +1996,7 @@ function syncSetPreviewDirection() {
 }
 
 function updateExportControls() {
-  const optimizable = ["webp", "ccfset-webp"].includes(
+  const optimizable = ["webp", "webm", "ccfset-webp"].includes(
     exportFormat.value,
   );
   const browserWebp = ["webp", "ccfset-webp"].includes(exportFormat.value);
@@ -1990,18 +2008,21 @@ function updateExportControls() {
   exportTarget.disabled = !optimizable;
   exportPriority.disabled =
     !optimizable || exportTarget.value === "unlimited" || (browserWebp && !advancedWebp);
-  exportLoops.disabled = false;
-  exportLoops.title = "";
+  exportLoops.disabled = exportFormat.value === "webm";
+  exportLoops.title =
+    exportFormat.value === "webm" ? "WebMのループは再生側で設定します" : "";
   document.querySelector("#exportTargetControl").hidden = !optimizable;
   document.querySelector("#optimizationPriorityControl").hidden = !optimizable;
   document.querySelector("#optimizationPriorityHelp").hidden = !optimizable;
   document.querySelector("#advancedBrowserOptimizationControl").hidden = exportFormat.value !== "webp";
-  document.querySelector("#exportLoopsControl").hidden = false;
+  document.querySelector("#exportLoopsControl").hidden =
+    exportFormat.value === "webm";
   document.querySelector("#customTargetControl").hidden =
     !optimizable || exportTarget.value !== "custom";
   const guides = {
     apng: "GitHub Pages・ブラウザ単体で書き出し可能。可逆圧縮のため画質スライダーはなく、現在は容量指定の対象外です。",
     webp: "Animated WebP。GitHub Pages・ブラウザ単体で書き出し可能。容量指定時は圧縮品質を段階的に調整します。",
+    webm: "VP9 alpha WebM。ローカル版で利用できます。ループはOBSなど再生側で設定します。",
     "ccfset-apng":
       "OUT（透明→幕）＋HOLD（固定PNG）＋IN（OUTの挙動反転）をZIP化。GitHub Pages対応。",
     "ccfset-webp":
@@ -2028,6 +2049,89 @@ function updateExportControls() {
   exportPriority.title = priorityHelp.textContent;
 }
 
+async function detectLocalWebmSupport() {
+  if (!webmOption) return;
+  try {
+    const response = await fetch("/api/capabilities", { cache: "no-store" });
+    if (!response.ok) return;
+    const capabilities = await response.json();
+    localEditionAvailable = capabilities.edition === "local";
+    if (localEditionAvailable) editionBadge.textContent = "v0.2 Beta・ローカル版";
+    const directFolderAvailable =
+      localEditionAvailable &&
+      capabilities.directFolder &&
+      typeof window.showDirectoryPicker === "function";
+    localOutputControl.hidden = !directFolderAvailable;
+    if (capabilities.ffmpeg && capabilities.formats?.includes("webm")) {
+      webmOption.disabled = false;
+      webmOption.textContent = "WebM（VP9 alpha・ローカル）";
+    } else if (localEditionAvailable) {
+      webmOption.textContent = "WebM（FFmpegが見つかりません）";
+    }
+    updateExportControls();
+  } catch {}
+}
+
+async function chooseLocalExportDirectory() {
+  if (!localEditionAvailable || typeof window.showDirectoryPicker !== "function") {
+    throw new Error("フォルダ直接保存はローカル版のChrome / Edgeで利用できます");
+  }
+  exportDirectoryHandle = await window.showDirectoryPicker({ mode: "readwrite" });
+  exportDirectoryStatus.textContent = `出力先：${exportDirectoryHandle.name}（同名は自動連番）`;
+  return exportDirectoryHandle;
+}
+
+function numberedFileName(fileName, number) {
+  if (number < 2) return fileName;
+  const dot = fileName.lastIndexOf(".");
+  return dot > 0
+    ? `${fileName.slice(0, dot)}_${number}${fileName.slice(dot)}`
+    : `${fileName}_${number}`;
+}
+
+async function unusedFileName(directoryHandle, fileName) {
+  for (let number = 1; number < 10000; number += 1) {
+    const candidate = numberedFileName(fileName, number);
+    try {
+      await directoryHandle.getFileHandle(candidate);
+    } catch (error) {
+      if (error.name === "NotFoundError") return candidate;
+      throw error;
+    }
+  }
+  throw new Error("同名ファイルの連番上限に達しました");
+}
+
+async function saveFilesToDirectory(files) {
+  const directoryHandle = exportDirectoryHandle || await chooseLocalExportDirectory();
+  const savedNames = [];
+  for (const file of files) {
+    const name = await unusedFileName(directoryHandle, file.name);
+    const handle = await directoryHandle.getFileHandle(name, { create: true });
+    const writable = await handle.createWritable();
+    await writable.write(file.data);
+    await writable.close();
+    savedNames.push(name);
+  }
+  exportDirectoryStatus.textContent = `出力先：${directoryHandle.name}（${savedNames.length}ファイル保存済み）`;
+  return savedNames;
+}
+
+chooseExportDirectory.addEventListener("click", async () => {
+  try {
+    await chooseLocalExportDirectory();
+  } catch (error) {
+    if (error.name !== "AbortError") exportDirectoryStatus.textContent = error.message;
+  }
+});
+
+exportDestination.addEventListener("input", () => {
+  chooseExportDirectory.hidden = exportDestination.value !== "folder";
+  exportDirectoryStatus.hidden = exportDestination.value !== "folder";
+});
+chooseExportDirectory.hidden = true;
+exportDirectoryStatus.hidden = true;
+
 exportFormat.addEventListener("input", updateExportControls);
 exportTarget.addEventListener("input", updateExportControls);
 exportPriority.addEventListener("input", updateExportControls);
@@ -2037,6 +2141,7 @@ exportFps.addEventListener("input", () => {
   if (previewMatchFps.checked) replayFromControl(exportFps);
   requestAnimationFrame(renderSetPreview);
 });
+detectLocalWebmSupport();
 setPreviewDirection.addEventListener("input", () => {
   const baseKind = effectiveKind();
   if (baseKind === "wipe") wipeAngle.value = setPreviewDirection.value;
@@ -2165,6 +2270,19 @@ exportName.addEventListener("input", () => {
 );
 refreshAutomaticFileName();
 
+function decodeMetadataHeader(value) {
+  if (!value) return null;
+  const normalized = value
+    .replace(/-/g, "+")
+    .replace(/_/g, "/")
+    .padEnd(Math.ceil(value.length / 4) * 4, "=");
+  return JSON.parse(
+    new TextDecoder().decode(
+      Uint8Array.from(atob(normalized), (character) => character.charCodeAt(0)),
+    ),
+  );
+}
+
 function optimizationTarget() {
   if (exportTarget.value === "1mb") return 950 * 1024;
   if (exportTarget.value === "5mb") return Math.floor(4.8 * 1024 * 1024);
@@ -2176,11 +2294,79 @@ function optimizationTarget() {
   return 0;
 }
 
+async function makeEncoderPayload(
+  context,
+  width,
+  height,
+  fps,
+  state,
+  timings,
+  progressStart = 0,
+  progressSpan = 0.45,
+) {
+  const totalDelayMs = timings.reduce((sum, timing) => sum + timing.delayMs, 0);
+  const effectiveFps = Math.min(60, (timings.length * 1000) / totalDelayMs);
+  const files = [
+    {
+      name: "manifest.json",
+      data: new TextEncoder().encode(
+        JSON.stringify({
+          width,
+          height,
+          fps: effectiveFps,
+          loops: Math.max(0, Number(exportLoops.value) || 0),
+          frames: timings.map(({ delayMs }) => ({ delayMs })),
+        }),
+      ),
+    },
+  ];
+  for (let index = 0; index < timings.length; index += 1) {
+    renderTransitionFrame(context, width, height, timings[index].timeMs, state);
+    files.push({
+      name: `frame-${String(index).padStart(5, "0")}.png`,
+      data: await encodePng(context.getImageData(0, 0, width, height)),
+    });
+    exportProgress.value =
+      progressStart + (progressSpan * (index + 1)) / timings.length;
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+  }
+  return encodeZip(files);
+}
+
+async function requestLocalEncode(payload, format, target = 0) {
+  const params = new URLSearchParams({
+    format,
+    targetBytes: String(target),
+    priority: exportPriority.value,
+  });
+  const response = await fetch(`/api/encode?${params}`, {
+    method: "POST",
+    headers: { "content-type": "application/zip" },
+    body: payload,
+  });
+  if (!response.ok) {
+    let message = `エンコードサーバーが応答しません（HTTP ${response.status}）`;
+    try {
+      message = (await response.json()).error || message;
+    } catch {}
+    throw new Error(`${message}。WebMを利用できるローカル版から再試行してください`);
+  }
+  return {
+    blob: await response.blob(),
+    metadata: decodeMetadataHeader(
+      response.headers.get("x-transition-options"),
+    ),
+  };
+}
+
 exportButton.addEventListener("click", async () => {
   exportButton.disabled = true;
   inspectExport.disabled = true;
   exportProgress.value = 0;
   try {
+    if (exportDestination.value === "folder" && !exportDirectoryHandle) {
+      await chooseLocalExportDirectory();
+    }
     const width = Math.max(
       64,
       Math.min(3840, Number(exportWidth.value) || 960),
@@ -2203,6 +2389,7 @@ exportButton.addEventListener("click", async () => {
     );
     let blob;
     let filename;
+    let outputFiles = null;
     const endpointWarnings = [];
     const endpointState = (imageData, expectedAlpha) => {
       let transparent = true;
@@ -2332,6 +2519,28 @@ exportButton.addEventListener("click", async () => {
       };
       blob = new Blob([encoded.bytes], { type: "image/webp" });
       filename = `${safeName}.webp`;
+    } else if (exportFormat.value === "webm") {
+      const safeTimings = await ensureEndpoints(state, timings, "WebM");
+      const payload = await makeEncoderPayload(
+        context,
+        width,
+        height,
+        fps,
+        state,
+        safeTimings,
+      );
+      exportProgress.value = 0.5;
+      exportResult.textContent = optimizationTarget()
+        ? "容量を探索中…（複数回エンコードします）"
+        : "エンコード中…";
+      const encoded = await requestLocalEncode(
+        payload,
+        exportFormat.value,
+        optimizationTarget(),
+      );
+      encodedMetadata = encoded.metadata;
+      blob = encoded.blob;
+      filename = `${safeName}.${exportFormat.value}`;
     } else if (exportFormat.value === "apng") {
       const bytes = await makeApng(state, timings);
       blob = new Blob([bytes], { type: "image/png" });
@@ -2406,19 +2615,15 @@ exportButton.addEventListener("click", async () => {
       const holdBytes = await encodePng(
         context.getImageData(0, 0, width, height),
       );
-      blob = new Blob(
-        [
-          encodeZip([
-            {
-              name: `${safeName}_01_out.${animationExtension}`,
-              data: outBytes,
-            },
-            { name: `${safeName}_02_hold.png`, data: holdBytes },
-            { name: `${safeName}_03_in.${animationExtension}`, data: inBytes },
-          ]),
-        ],
-        { type: "application/zip" },
-      );
+      outputFiles = [
+        {
+          name: `${safeName}_01_out.${animationExtension}`,
+          data: outBytes,
+        },
+        { name: `${safeName}_02_hold.png`, data: holdBytes },
+        { name: `${safeName}_03_in.${animationExtension}`, data: inBytes },
+      ];
+      blob = new Blob([encodeZip(outputFiles)], { type: "application/zip" });
       filename = `${safeName}_ccfolia_${animationExtension}_set.zip`;
     } else {
       const files = [];
@@ -2439,7 +2644,8 @@ exportButton.addEventListener("click", async () => {
         exportProgress.value = (index + 1) / safeTimings.length;
         await new Promise((resolve) => requestAnimationFrame(resolve));
       }
-      blob = new Blob([encodeZip(files)], { type: "application/zip" });
+      outputFiles = files;
+      blob = new Blob([encodeZip(outputFiles)], { type: "application/zip" });
       filename = `${safeName}_png.zip`;
     }
     exportProgress.value = 1;
@@ -2453,14 +2659,31 @@ exportButton.addEventListener("click", async () => {
     const endpointSummary = endpointWarnings.length
       ? ` / ⚠ ${[...new Set(endpointWarnings)].join("、")}`
       : " / 端点保証済み";
-    exportResult.textContent = `${filename} / ${(blob.size / 1024).toFixed(1)} KiB / ${actualWidth}×${actualHeight} / ${actualFps}fps / ${timings.length}基準フレーム${optimizationSummary}${endpointSummary}`;
-    inspectExport.disabled = !["apng", "webp"].includes(exportFormat.value);
-    downloadBlob(blob, filename);
-    window.dispatchEvent(
-      new CustomEvent("transition-export-complete", {
-        detail: { filename, blob },
-      }),
-    );
+    const directFiles = outputFiles || [{ name: filename, data: blob }];
+    if (exportDestination.value === "folder") {
+      const savedNames = await saveFilesToDirectory(directFiles);
+      const totalBytes = directFiles.reduce(
+        (sum, file) => sum + (file.data.size ?? file.data.byteLength ?? file.data.length ?? 0),
+        0,
+      );
+      lastExport = null;
+      inspectExport.disabled = true;
+      exportResult.textContent = `${savedNames.length}ファイルを直接保存 / ${(totalBytes / 1024).toFixed(1)} KiB / ${actualWidth}×${actualHeight} / ${actualFps}fps / ${timings.length}基準フレーム${optimizationSummary}${endpointSummary}`;
+      window.dispatchEvent(
+        new CustomEvent("transition-export-complete", {
+          detail: { filenames: savedNames, directory: exportDirectoryHandle.name },
+        }),
+      );
+    } else {
+      exportResult.textContent = `${filename} / ${(blob.size / 1024).toFixed(1)} KiB / ${actualWidth}×${actualHeight} / ${actualFps}fps / ${timings.length}基準フレーム${optimizationSummary}${endpointSummary}`;
+      inspectExport.disabled = !["apng", "webp"].includes(exportFormat.value);
+      downloadBlob(blob, filename);
+      window.dispatchEvent(
+        new CustomEvent("transition-export-complete", {
+          detail: { filename, blob },
+        }),
+      );
+    }
   } catch (error) {
     exportResult.textContent = `書き出し失敗：${error.message}`;
   } finally {
