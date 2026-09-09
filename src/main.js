@@ -1911,6 +1911,15 @@ function ccfSetOpacity() {
   return Math.max(0, Math.min(1, Number(input?.value ?? 100) / 100));
 }
 
+function ccfSetShapeOpacity(baseState, setOpacity) {
+  if (baseState.kind === "fade") return undefined;
+  // Shape opacity and edge feather are independent:
+  // when "force opaque" is enabled, the solid side of the moving edge
+  // must remain alpha=1 while only the feather ramp is partially transparent.
+  if (baseState.forceOpaque || ["split", "stripe"].includes(baseState.kind)) return 1;
+  return setOpacity;
+}
+
 function setIntegratedExportMode(enabled) {
   editorLayout.classList.toggle("with-export-dock", enabled);
   integratedExportDock.hidden = !enabled;
@@ -1957,8 +1966,8 @@ function renderSetPreview(progress = .55) {
   const previewTimeMs = previewMatchFps.checked && progress < 1
     ? Math.floor(durationMs * progress / frameDuration) * frameDuration
     : durationMs * progress;
-  const fixedOpaque = ["split", "stripe"].includes(base.kind);
-  const shapeOpacity = base.kind === "fade" ? undefined : setOpacity;
+  const fixedOpaque = base.forceOpaque || ["split", "stripe"].includes(base.kind);
+  const shapeOpacity = ccfSetShapeOpacity(base, setOpacity);
   const outState = { ...base, opacityMode: "cover", durationMs, startOpacity: 0, endOpacity: setOpacity, forceOpaque: fixedOpaque, shapeOpacity };
   const inState = { ...base, opacityMode: "reveal", durationMs, startOpacity: setOpacity, endOpacity: 0, forceOpaque: fixedOpaque, shapeOpacity };
   const samples = [["setPreviewOut", outState, previewTimeMs], ["setPreviewHold", outState, durationMs], ["setPreviewIn", inState, previewTimeMs]];
@@ -2338,7 +2347,7 @@ exportButton.addEventListener("click", async () => {
       filename = `${safeName}.png`;
     } else if (["ccfset-apng", "ccfset-webp"].includes(exportFormat.value)) {
       const setOpacity = ccfSetOpacity();
-      const fixedOpaque = ["split", "stripe"].includes(state.kind);
+      const fixedOpaque = state.forceOpaque || ["split", "stripe"].includes(state.kind);
       const outDuration =
         opacityMode.value === "roundtrip" ? state.enterMs : state.durationMs;
       const inDuration =
@@ -2350,7 +2359,7 @@ exportButton.addEventListener("click", async () => {
         startOpacity: 0,
         endOpacity: setOpacity,
         forceOpaque: fixedOpaque,
-        shapeOpacity: state.kind === "fade" ? undefined : setOpacity,
+        shapeOpacity: ccfSetShapeOpacity(state, setOpacity),
       };
       const inState = {
         ...state,
@@ -2359,7 +2368,7 @@ exportButton.addEventListener("click", async () => {
         startOpacity: setOpacity,
         endOpacity: 0,
         forceOpaque: fixedOpaque,
-        shapeOpacity: state.kind === "fade" ? undefined : setOpacity,
+        shapeOpacity: ccfSetShapeOpacity(state, setOpacity),
       };
       let outBytes;
       let inBytes;
