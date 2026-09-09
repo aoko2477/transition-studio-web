@@ -1,0 +1,11 @@
+{
+  "name": "transition-studio-web",
+  "version": "0.2.0-beta.0",
+  "private": true,
+  "description": "Browser-based transition asset creator, inspector, exporter, and size optimizer.",
+  "type": "module",
+  "scripts": {
+    "check": "node --check src/main.js && node --check src/frame-renderer.js && node --check src/media-encoders.js && node --check src/media-inspector.js && node --check src/transition-recipes.js && node --check src/webp-browser-encoder.js && node --check src/ui-enhancements.js && node --check src/ccf-export-lifecycle.js"
+  }
+}
+
