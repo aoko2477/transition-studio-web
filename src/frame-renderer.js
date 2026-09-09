@@ -101,22 +101,42 @@ function drawAngledWipe(ctx, width, height, coverage, angleDegrees, color, opaci
     drawPolygon(polygon, opacity);
     return;
   }
-  const steps = Math.max(8, Math.min(32, Math.ceil(featherPx * 1.5)));
-  const source = [[-width / 2, -height / 2], [width / 2, -height / 2], [width / 2, height / 2], [-width / 2, height / 2]];
   const baseBoundary = continueProgress === null
     ? (forwardExit ? -extent + extent * 2 * (1 - coverage) : -extent + extent * 2 * coverage)
     : -extent + extent * 2 * continueProgress;
   const keepGreater = continueProgress !== null || forwardExit;
-  for (let index = 0; index < steps; index += 1) {
-    const ratio = index / Math.max(1, steps - 1);
-    const offset = keepGreater
-      ? -featherPx + featherPx * 2 * ratio
-      : featherPx - featherPx * 2 * ratio;
-    let feathered = clipPolygon(source, normalX, normalY, baseBoundary + offset, keepGreater);
-    if (continueProgress !== null)
-      feathered = clipPolygon(feathered, normalX, normalY, baseBoundary + extent * 2);
-    drawPolygon(feathered, opacity / steps);
+
+  // Feather only the moving boundary. The previous layered-polygon approach
+  // divided opacity across overlapping shapes, so even the solid side of a
+  // 100%-opaque wipe converged to roughly 63% alpha. A gradient aligned to the
+  // wipe normal keeps the body at the requested opacity and changes alpha only
+  // within the feather band.
+  const startX = width / 2 - normalX * extent;
+  const startY = height / 2 - normalY * extent;
+  const endX = width / 2 + normalX * extent;
+  const endY = height / 2 + normalY * extent;
+  const gradient = ctx.createLinearGradient(startX, startY, endX, endY);
+  const normalized = (boundary) => clamp01((boundary + extent) / Math.max(1e-6, extent * 2));
+  const low = normalized(baseBoundary - featherPx);
+  const high = normalized(baseBoundary + featherPx);
+
+  if (keepGreater) {
+    gradient.addColorStop(0, 'transparent');
+    gradient.addColorStop(low, 'transparent');
+    gradient.addColorStop(high, color);
+    gradient.addColorStop(1, color);
+  } else {
+    gradient.addColorStop(0, color);
+    gradient.addColorStop(low, color);
+    gradient.addColorStop(high, 'transparent');
+    gradient.addColorStop(1, 'transparent');
   }
+
+  ctx.save();
+  ctx.globalAlpha = clamp01(opacity);
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, width, height);
+  ctx.restore();
 }
 
 function fillSoftRect(ctx, color, x, y, width, height, opacity, featherPx = 0, movingEdge = 'right') {
