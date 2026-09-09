@@ -1,0 +1,169 @@
+name: Publish branch preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch or ref to publish
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: transition-studio-preview-${{ github.event.pull_request.head.ref || inputs.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Resolve source ref and preview slug
+        id: meta
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            ref="${{ github.event.pull_request.head.ref }}"
+          else
+            ref="${{ inputs.ref }}"
+          fi
+
+          slug="${ref#*/}"
+          slug="$(printf '%s' "$slug" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9._-]+/-/g; s/^-+//; s/-+$//')"
+          if [ -z "$slug" ]; then
+            echo "Could not derive preview slug from ref: $ref" >&2
+            exit 1
+          fi
+
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          echo "slug=$slug" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout preview source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.meta.outputs.ref }}
+          path: source
+
+      - name: Checkout production branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: site
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build static preview snapshot
+        shell: bash
+        env:
+          PREVIEW_REF: ${{ steps.meta.outputs.ref }}
+          PREVIEW_SLUG: ${{ steps.meta.outputs.slug }}
+        run: |
+          target="site/preview/$PREVIEW_SLUG"
+          rm -rf "$target"
+          mkdir -p "$target"
+
+          cp source/index.html "$target/index.html"
+          cp -R source/src "$target/src"
+
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          ref = os.environ["PREVIEW_REF"]
+          slug = os.environ["PREVIEW_SLUG"]
+          target = Path("site") / "preview" / slug
+          index_path = target / "index.html"
+          html = index_path.read_text(encoding="utf-8")
+
+          if 'name="robots"' not in html:
+              html = html.replace(
+                  "</head>",
+                  '    <meta name="robots" content="noindex,nofollow" />\n  </head>',
+              )
+          html = html.replace(
+              "</body>",
+              '    <script src="./preview-banner.js"></script>\n  </body>',
+          )
+          index_path.write_text(html, encoding="utf-8")
+
+          branch = json.dumps(ref, ensure_ascii=False)
+          banner = f"""(() => {{
+            const branch = {branch};
+            const show = () => {{
+              if (document.querySelector('[data-transition-preview-banner]')) return;
+              const badge = document.createElement('aside');
+              badge.dataset.transitionPreviewBanner = '';
+              badge.setAttribute('role', 'status');
+              badge.innerHTML =
+                '<strong>🧪 DEVELOPMENT PREVIEW</strong>' +
+                '<span></span>' +
+                '<a href="/transition-studio-web/">本番版</a>';
+              badge.querySelector('span').textContent = branch;
+              Object.assign(badge.style, {{
+                position: 'fixed',
+                top: 'max(8px, env(safe-area-inset-top))',
+                right: '8px',
+                zIndex: '2147483647',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                maxWidth: 'calc(100vw - 16px)',
+                padding: '7px 9px',
+                border: '1px solid rgba(255,255,255,.25)',
+                borderRadius: '8px',
+                background: 'rgba(20,22,24,.92)',
+                color: '#f3f5f7',
+                boxShadow: '0 4px 18px rgba(0,0,0,.28)',
+                font: '11px/1.25 system-ui, sans-serif',
+                backdropFilter: 'blur(8px)',
+                WebkitBackdropFilter: 'blur(8px)',
+              }});
+              badge.querySelector('strong').style.whiteSpace = 'nowrap';
+              const label = badge.querySelector('span');
+              Object.assign(label.style, {{
+                overflow: 'hidden',
+                maxWidth: '32vw',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                opacity: '.72',
+              }});
+              const link = badge.querySelector('a');
+              Object.assign(link.style, {{
+                color: '#8ee8ef',
+                whiteSpace: 'nowrap',
+              }});
+              document.body.append(badge);
+            }};
+            if (document.readyState === 'loading') {{
+              document.addEventListener('DOMContentLoaded', show, {{ once: true }});
+            }} else {{
+              show();
+            }}
+          }})();\n"""
+          (target / "preview-banner.js").write_text(banner, encoding="utf-8")
+          PY
+
+      - name: Commit preview snapshot
+        shell: bash
+        working-directory: site
+        env:
+          PREVIEW_REF: ${{ steps.meta.outputs.ref }}
+          PREVIEW_SLUG: ${{ steps.meta.outputs.slug }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "preview/$PREVIEW_SLUG"
+
+          if git diff --cached --quiet; then
+            echo "Preview is already up to date."
+            exit 0
+          fi
+
+          git commit -m "chore: publish preview for $PREVIEW_REF"
+          git pull --rebase origin main
+          git push origin HEAD:main
