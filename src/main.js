@@ -67,7 +67,7 @@ app.innerHTML = `
             </div>
           </label>
           <p class="note" id="blinkEffectNote">書き出される効果は幕・マスク部分だけです。背景シーン自体のぼかし・拡大・揺れは含まれません。</p>
-          <label id="colorControl">色 <input id="color" type="color" value="#111111" /></label>
+          <label id="colorControl">色 <input id="color" type="color" value="#000000" /></label>
           <label id="durationControl">変化時間 <div class="number-with-unit"><input id="duration" type="number" min="0.1" max="10" step="0.1" value="1.0" /><span>秒</span></div><span id="durationValue">1.0秒</span></label>
           <label><span id="easingLabel">動き方</span>
             <select id="easing">
