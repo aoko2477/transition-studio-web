@@ -21,7 +21,7 @@ app.innerHTML = `
       <h1>Transition Studio</h1>
       <p>トランジション素材の作成・検査・容量最適化</p>
     </div>
-    <span id="editionBadge" class="badge">v0.2 Beta</span>
+    <span id="editionBadge" class="badge">v0.2 Beta 1</span>
   </header>
 
   <nav class="tabs" aria-label="主要機能">
@@ -336,7 +336,7 @@ app.innerHTML = `
           <label title="出力先に合わせた幅・高さをまとめて設定します。軽量プリセットは容量を抑えたい場合に向きます。">解像度プリセット <select id="resolutionPreset"><option value="1920x1080">Full HD・1920×1080</option><option value="1280x720">HD・1280×720</option><option value="960x540" selected>軽量16:9・960×540</option><option value="640x360">小型16:9・640×360</option><option value="3840x2160">4K・3840×2160</option><option value="1080x1080">正方形・1080×1080</option><option value="1000x1000">正方形・1000×1000</option><option value="custom">カスタム</option></select></label>
           <div class="export-dimensions"><label title="書き出す画像の横幅です。大きいほど細部を保てますが容量が増えます。">幅 <input id="exportWidth" type="number" min="64" max="3840" step="2" value="960"></label><label title="書き出す画像の高さです。大きいほど細部を保てますが容量が増えます。">高さ <input id="exportHeight" type="number" min="64" max="2160" step="2" value="540"></label><label title="1秒あたりのフレーム数です。30fpsは容量とのバランス、60fpsは滑らかさを優先します。">FPS <input id="exportFps" type="number" min="5" max="60" value="30"></label></div>
           <small class="field-help" title="FPSを上げるほどフレーム数が増えるため、同じ画質・解像度ではファイル容量も増えやすくなります。">30fps：標準・容量を抑えやすい ／ 60fps：よりなめらか・容量増</small>
-          <label id="exportTargetControl" title="Animated WebPの目標容量です。1MBは安全余裕を含む約950KiBを目標にします。3素材セットではZIP全体が目標内になるようOUTとINへ容量を配分します。">容量 <select id="exportTarget"><option value="1mb" selected>1MB</option><option value="5mb">5MB</option><option value="unlimited">制限なし</option><option value="custom">任意設定</option></select></label>
+          <label id="exportTargetControl" title="Animated WebPの1ファイルあたりの目標容量です。1MBは安全余裕を含む約950KiBを目標にします。3素材セットではOUTとINをそれぞれ個別に判定し、HOLDは含めません。">容量 <select id="exportTarget"><option value="1mb" selected>1MB／ファイル</option><option value="5mb">5MB／ファイル</option><option value="unlimited">制限なし</option><option value="custom">任意設定</option></select></label>
           <label id="customTargetControl" hidden>任意の上限（MiB） <input id="exportCustomTarget" type="number" min="0.1" max="100" step="0.1" value="1"></label>
           <label id="optimizationPriorityControl" title="容量上限へ収める際、画質・滑らかさ・解像度のどれを優先するか指定します。">最適化方針 <select id="exportPriority"><option value="auto" title="画質・FPS・画像サイズをバランスよく調整">自動</option><option value="quality" title="圧縮品質を優先し、必要に応じてFPS・画像サイズを下げる">画質優先</option><option value="fps" title="動きの滑らかさを優先し、圧縮品質・画像サイズを調整">FPS優先</option><option value="resolution" title="幅と高さを優先し、圧縮品質・FPSを調整">解像度優先</option></select></label>
           <label id="advancedBrowserOptimizationControl" class="check-row" title="通常は解像度とFPSを固定して圧縮品質だけを調整します。オンにすると容量内へ収めるためFPSと画像サイズも候補として探索します。"><input id="advancedBrowserOptimization" type="checkbox" /> 発展的：Web版でもFPS・画像サイズを探索</label>
@@ -2224,7 +2224,7 @@ function updateExportControls() {
     "ccfset-apng":
       "OUT（透明→幕）＋HOLD（固定PNG）＋IN（OUTの挙動反転）をZIP化。GitHub Pages対応。",
     "ccfset-webp":
-      "OUT（透明→幕）＋HOLD（固定PNG）＋IN（OUTの挙動反転）をZIP化。容量指定時はZIP全体を目標に、OUTとINの画質・FPS・解像度を自動調整します。",
+      "OUT（透明→幕）＋HOLD（固定PNG）＋IN（OUTの挙動反転）をZIP化。容量上限はOUTとINの各ファイルへ個別に適用し、HOLDは判定に含めません。",
     pngzip:
       "各フレームをPNGでZIP化。GitHub Pages・ブラウザ単体で書き出し可能。",
   };
@@ -2258,7 +2258,7 @@ async function detectLocalWebmSupport() {
     localEditionAvailable = capabilities.edition === "local";
     if (localEditionAvailable) {
       document.documentElement.dataset.edition = "local";
-      editionBadge.textContent = "v0.2 Beta・ローカル版";
+      editionBadge.textContent = "v0.2 Beta 1・ローカル版";
     }
     const directFolderAvailable =
       localEditionAvailable &&
@@ -2691,9 +2691,8 @@ exportButton.addEventListener("click", async () => {
       renderTimings,
       progressStart = 0,
       progressSpan = 1,
-      targetOverride = null,
     ) => {
-      const targetBytes = targetOverride ?? requestedTargetBytes;
+      const targetBytes = requestedTargetBytes;
       const advanced = targetBytes > 0 && (
         requestedFormat === "ccfset-webp" ||
         renderState.recipeId?.startsWith("fog-") ||
@@ -2813,15 +2812,11 @@ exportButton.addEventListener("click", async () => {
       let inBytes;
       let animationExtension;
       if (requestedFormat === "ccfset-webp") {
-        const setTargetBytes = requestedTargetBytes > 0
-          ? Math.max(1, Math.floor((requestedTargetBytes - 16 * 1024) / 2))
-          : 0;
         const outEncoded = await makeWebp(
           outState,
           frameTimesWithEndpoints(outDuration, fps, outState),
           0,
           0.45,
-          setTargetBytes,
         );
         outBytes = outEncoded.bytes;
         const inEncoded = await makeWebp(
@@ -2829,7 +2824,6 @@ exportButton.addEventListener("click", async () => {
           frameTimesWithEndpoints(inDuration, fps, inState),
           0.5,
           0.45,
-          setTargetBytes,
         );
         inBytes = inEncoded.bytes;
         encodedMetadata = {
