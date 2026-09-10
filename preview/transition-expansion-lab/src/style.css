@@ -92,6 +92,7 @@ select, input[type="number"], input:not([type]) { width: 100%; padding: 8px 9px;
 .seed-control { display: grid; grid-template-columns: minmax(0, 1fr) 34px 38px 34px; gap: 6px; align-items: center; }
 .seed-control button { min-height: 32px; padding: 4px; font-size: 14px; }
 .fog-variant-guide { margin: 10px 0; padding: 10px 12px; border-left: 3px solid #55cbd3; background: rgba(85, 203, 211, .08); color: #bfc9cd; font-size: 12px; line-height: 1.65; }
+.fog-variant-guide span { color: #8f9ca2; }
 .easing-editor { margin: -7px 0 16px; padding: 9px; border: 1px solid #343b40; background: #15191b; }
 .easing-editor svg { display: block; width: 100%; height: auto; touch-action: none; }
 .easing-grid { fill: none; stroke: #30383d; stroke-width: 1; }

@@ -61,7 +61,7 @@ app.innerHTML = `
           <p class="preset-summary" id="presetSummary"></p>
           <div id="fogControls" class="is-hidden">
             <div class="warning"><strong>実験中：</strong>霧パターンは見た目・容量・速度を比較するための試作です。</div>
-            <blockquote class="fog-variant-guide"><strong>3種類の違い</strong><br>フィル：画面全体へ自然に広がる基本形<br>スイープ：指定角度から流れ込む方向性のある霧<br>ブルーム：複数地点から湧き、重なって広がる霧</blockquote>
+            <blockquote class="fog-variant-guide"><strong>3種類の違い</strong><br><span>共通の霧ノイズを土台に、広がり方のアルゴリズムと初期パラメータの両方を変えています。同じ値に揃えても同じ見た目にはなりません。</span><br>フィル：ノイズを画面全体へ均等に広げる基本形<br>スイープ：ノイズに方向グラデーションを合成し、指定角度から流し込む<br>ブルーム：Seedで決まる複数地点から、重なりながら湧き広がる</blockquote>
             <label>霧の大きさ <input id="fogScale" type="range" min="1" max="8" step="0.1" value="3.4" /><output id="fogScaleValue">3.4</output></label>
             <label>霧の濃さ <input id="fogDensity" type="range" min="0" max="100" step="1" value="55" /><output id="fogDensityValue">55</output></label>
             <label>揺らぎ <input id="fogTurbulence" type="range" min="0" max="100" step="1" value="58" /><output id="fogTurbulenceValue">58</output></label>
