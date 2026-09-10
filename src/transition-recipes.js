@@ -53,12 +53,15 @@ export const COMPOUND_RECIPES = Object.freeze({
     ],
   },
   inkBloom: {
-    version: 1, id: 'ink-bloom', name: '墨のにじみ', durationMs: 1600, fps: 30, seed: 5202,
+    version: 1, id: 'ink-bloom', name: '墨のにじみ', durationMs: 1800, fps: 30, seed: 5202,
+    status: 'experimental',
+    defaults: { sourceCount: 5, scale: 1.15, roughness: 68, feather: 22, branching: 58, splatter: 42, absorption: 1 },
     exportHints: { complexity: 'high', webpCost: 'high', preferDetailReduction: true, minimumRecommendedFps: 20 },
     layers: [
-      { family: 'baseMask', primitive: 'noiseBloom', window: [0, 1450], easing: 'smooth', sourceCount: 6 },
-      { family: 'secondary', primitive: 'splatter', window: [120, 980], easing: 'easeOut', count: 14 },
-      { family: 'finish', primitive: 'dilation', window: [900, 1600], easing: 'easeIn', from: 0, to: 1 },
+      { family: 'proceduralField', primitive: 'paperFiberNoise', window: [0, 1800], easing: 'smooth' },
+      { family: 'baseMask', primitive: 'absorbingInkBloom', window: [0, 1680], easing: 'smooth', sourceCount: 5 },
+      { family: 'secondary', primitive: 'seededInkSplatter', window: [120, 1180], easing: 'easeOut' },
+      { family: 'finish', primitive: 'uniformCover', window: [1510, 1800], easing: 'smooth' },
     ],
   },
   slashCut: {
@@ -97,7 +100,7 @@ export const COMPOUND_RECIPES = Object.freeze({
   },
   fogFill: {
     version: 1, id: 'fog-fill', name: '霧・フィル', durationMs: 2000, fps: 30, seed: 8127,
-    status: 'experimental',
+    status: 'candidate',
     defaults: { scale: 3.4, density: 55, turbulence: 58, feather: 18, drift: .48 },
     exportHints: { complexity: 'high', webpCost: 'high', preferDetailReduction: true, minimumRecommendedFps: 20 },
     layers: [
@@ -108,7 +111,7 @@ export const COMPOUND_RECIPES = Object.freeze({
   },
   fogSweep: {
     version: 1, id: 'fog-sweep', name: '霧・スイープ', durationMs: 1800, fps: 30, seed: 8137,
-    status: 'experimental',
+    status: 'candidate',
     defaults: { scale: 3.8, density: 52, turbulence: 64, feather: 16, drift: .62 },
     exportHints: { complexity: 'high', webpCost: 'high', preferDetailReduction: true, minimumRecommendedFps: 20 },
     layers: [
@@ -120,7 +123,7 @@ export const COMPOUND_RECIPES = Object.freeze({
   },
   fogBloom: {
     version: 1, id: 'fog-bloom', name: '霧・ブルーム', durationMs: 2100, fps: 30, seed: 8147,
-    status: 'experimental',
+    status: 'candidate',
     defaults: { scale: 3.0, density: 58, turbulence: 52, feather: 22, drift: .36 },
     exportHints: { complexity: 'high', webpCost: 'high', preferDetailReduction: true, minimumRecommendedFps: 20 },
     layers: [
