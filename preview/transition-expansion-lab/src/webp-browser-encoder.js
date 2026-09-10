@@ -85,7 +85,7 @@ export async function encodeAnimatedWebp(frames, width, height, options = {}) {
 
 export async function encodeAnimatedWebpToTarget(frameFactory, width, height, options = {}) {
   const targetBytes = Math.max(0, Number(options.targetBytes) || 0);
-  const qualities = targetBytes ? [.88, .8, .72, .64, .56, .48, .4] : [.84];
+  const qualities = targetBytes ? [.88, .8, .72, .64, .56, .48, .4, .32, .24, .16] : [.84];
   let bytes;
   let quality = qualities[0];
   for (let attempt = 0; attempt < qualities.length; attempt += 1) {

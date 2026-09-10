@@ -60,11 +60,22 @@ function directionVector(direction) {
   return [1, 0];
 }
 
+function angleVector(angle, direction) {
+  if (!Number.isFinite(Number(angle))) return directionVector(direction);
+  const radians = Number(angle) * Math.PI / 180;
+  return [Math.cos(radians), Math.sin(radians)];
+}
+
 function sweepOrigin(nx, ny, direction) {
   if (direction === 'left') return nx;
   if (direction === 'down') return 1 - ny;
   if (direction === 'up') return ny;
   return 1 - nx;
+}
+
+function angledSweepOrigin(nx, ny, dirX, dirY) {
+  const extent = Math.max(.0001, (Math.abs(dirX) + Math.abs(dirY)) * .5);
+  return clamp01(.5 - ((nx - .5) * dirX + (ny - .5) * dirY) / (extent * 2));
 }
 
 export function buildFogAlpha(width, height, progress, options = {}) {
@@ -86,7 +97,7 @@ export function buildFogAlpha(width, height, progress, options = {}) {
   const turbulence = Math.max(0, Math.min(100, finiteOr(options.turbulence, 58))) / 100;
   const feather = .018 + Math.max(0, Math.min(100, finiteOr(options.feather, 18))) / 100 * .20;
   const drift = Math.max(0, Math.min(2, finiteOr(options.drift, .48)));
-  const [dirX, dirY] = directionVector(direction);
+  const [dirX, dirY] = angleVector(options.angle, direction);
   const driftX = dirX * p * drift;
   const driftY = dirY * p * drift;
   const threshold = 1.035 - p * 1.07;
@@ -114,7 +125,10 @@ export function buildFogAlpha(width, height, progress, options = {}) {
 
       let field = noise;
       if (variant === 'sweep') {
-        field = noise * .69 + sweepOrigin(nx, ny, direction) * .31;
+        const origin = Number.isFinite(Number(options.angle))
+          ? angledSweepOrigin(nx, ny, dirX, dirY)
+          : sweepOrigin(nx, ny, direction);
+        field = noise * .69 + origin * .31;
       } else if (variant === 'bloom') {
         let bloom = 0;
         for (const point of bloomPoints) {
