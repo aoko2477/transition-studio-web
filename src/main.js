@@ -61,12 +61,22 @@ app.innerHTML = `
           <p class="preset-summary" id="presetSummary"></p>
           <div id="fogControls" class="is-hidden">
             <div class="warning"><strong>実験中：</strong>霧パターンは見た目・容量・速度を比較するための試作です。</div>
+            <blockquote class="fog-variant-guide"><strong>3種類の違い</strong><br>フィル：画面全体へ自然に広がる基本形<br>スイープ：指定角度から流れ込む方向性のある霧<br>ブルーム：複数地点から湧き、重なって広がる霧</blockquote>
             <label>霧の大きさ <input id="fogScale" type="range" min="1" max="8" step="0.1" value="3.4" /><output id="fogScaleValue">3.4</output></label>
             <label>霧の濃さ <input id="fogDensity" type="range" min="0" max="100" step="1" value="55" /><output id="fogDensityValue">55</output></label>
             <label>揺らぎ <input id="fogTurbulence" type="range" min="0" max="100" step="1" value="58" /><output id="fogTurbulenceValue">58</output></label>
             <label>縁の柔らかさ <input id="fogFeather" type="range" min="0" max="100" step="1" value="18" /><output id="fogFeatherValue">18</output></label>
             <label>流れ <input id="fogDrift" type="range" min="0" max="1.5" step="0.01" value="0.48" /><output id="fogDriftValue">0.48</output></label>
-            <label>Seed <input id="fogSeed" type="number" min="0" max="2147483647" step="1" value="8127" /></label>
+            <label>流れる角度 <div class="range-number-row"><input id="fogAngleSlider" type="range" min="0" max="359" step="1" value="0" /><div class="number-with-unit"><input id="fogAngle" type="number" min="0" max="359" step="1" value="0" /><span>°</span></div></div></label>
+            <label title="Seedは霧の形を決める番号です。同じ設定とSeedなら同じ霧を再現できます。">Seed
+              <div class="seed-control">
+                <input id="fogSeed" type="number" min="0" max="2147483647" step="1" value="8127" aria-describedby="fogSeedHelp" />
+                <button id="fogSeedPrevious" type="button" title="前に使ったSeedへ戻る" aria-label="前に使ったSeedへ戻る">←</button>
+                <button id="fogSeedRandom" type="button" title="新しいSeedをランダム生成" aria-label="Seedをランダム生成">🎲</button>
+                <button id="fogSeedNext" type="button" title="次に使ったSeedへ進む" aria-label="次に使ったSeedへ進む">→</button>
+              </div>
+              <small id="fogSeedHelp">霧の形を再現する番号です。ランダム生成の履歴を最大30件まで前後できます。</small>
+            </label>
           </div>
           <label id="blinkPatternControl">まばたき動作
             <select id="blinkPattern"><option value="single">ゆっくり閉じる</option><option value="double">1回ぱちっ → 本閉じ</option></select>
@@ -326,7 +336,7 @@ app.innerHTML = `
           <label title="出力先に合わせた幅・高さをまとめて設定します。軽量プリセットは容量を抑えたい場合に向きます。">解像度プリセット <select id="resolutionPreset"><option value="1920x1080">Full HD・1920×1080</option><option value="1280x720">HD・1280×720</option><option value="960x540" selected>軽量16:9・960×540</option><option value="640x360">小型16:9・640×360</option><option value="3840x2160">4K・3840×2160</option><option value="1080x1080">正方形・1080×1080</option><option value="1000x1000">正方形・1000×1000</option><option value="custom">カスタム</option></select></label>
           <div class="export-dimensions"><label title="書き出す画像の横幅です。大きいほど細部を保てますが容量が増えます。">幅 <input id="exportWidth" type="number" min="64" max="3840" step="2" value="960"></label><label title="書き出す画像の高さです。大きいほど細部を保てますが容量が増えます。">高さ <input id="exportHeight" type="number" min="64" max="2160" step="2" value="540"></label><label title="1秒あたりのフレーム数です。30fpsは容量とのバランス、60fpsは滑らかさを優先します。">FPS <input id="exportFps" type="number" min="5" max="60" value="30"></label></div>
           <small class="field-help" title="FPSを上げるほどフレーム数が増えるため、同じ画質・解像度ではファイル容量も増えやすくなります。">30fps：標準・容量を抑えやすい ／ 60fps：よりなめらか・容量増</small>
-          <label id="exportTargetControl" title="Animated WebPの目標容量です。1MBは安全余裕を含む約950KiBを目標にします。3素材セットではOUTとINを別々に判定し、HOLDは含めません。">容量 <select id="exportTarget"><option value="1mb" selected>1MB</option><option value="5mb">5MB</option><option value="unlimited">制限なし</option><option value="custom">任意設定</option></select></label>
+          <label id="exportTargetControl" title="Animated WebPの目標容量です。1MBは安全余裕を含む約950KiBを目標にします。3素材セットではZIP全体が目標内になるようOUTとINへ容量を配分します。">容量 <select id="exportTarget"><option value="1mb" selected>1MB</option><option value="5mb">5MB</option><option value="unlimited">制限なし</option><option value="custom">任意設定</option></select></label>
           <label id="customTargetControl" hidden>任意の上限（MiB） <input id="exportCustomTarget" type="number" min="0.1" max="100" step="0.1" value="1"></label>
           <label id="optimizationPriorityControl" title="容量上限へ収める際、画質・滑らかさ・解像度のどれを優先するか指定します。">最適化方針 <select id="exportPriority"><option value="auto" title="画質・FPS・画像サイズをバランスよく調整">自動</option><option value="quality" title="圧縮品質を優先し、必要に応じてFPS・画像サイズを下げる">画質優先</option><option value="fps" title="動きの滑らかさを優先し、圧縮品質・画像サイズを調整">FPS優先</option><option value="resolution" title="幅と高さを優先し、圧縮品質・FPSを調整">解像度優先</option></select></label>
           <label id="advancedBrowserOptimizationControl" class="check-row" title="通常は解像度とFPSを固定して圧縮品質だけを調整します。オンにすると容量内へ収めるためFPSと画像サイズも候補として探索します。"><input id="advancedBrowserOptimization" type="checkbox" /> 発展的：Web版でもFPS・画像サイズを探索</label>
@@ -546,7 +556,12 @@ const fogDensity = document.querySelector("#fogDensity");
 const fogTurbulence = document.querySelector("#fogTurbulence");
 const fogFeather = document.querySelector("#fogFeather");
 const fogDrift = document.querySelector("#fogDrift");
+const fogAngleSlider = document.querySelector("#fogAngleSlider");
+const fogAngle = document.querySelector("#fogAngle");
 const fogSeed = document.querySelector("#fogSeed");
+const fogSeedPrevious = document.querySelector("#fogSeedPrevious");
+const fogSeedRandom = document.querySelector("#fogSeedRandom");
+const fogSeedNext = document.querySelector("#fogSeedNext");
 const fogScaleValue = document.querySelector("#fogScaleValue");
 const fogDensityValue = document.querySelector("#fogDensityValue");
 const fogTurbulenceValue = document.querySelector("#fogTurbulenceValue");
@@ -1251,6 +1266,9 @@ function updateFogControls() {
   fogTurbulenceValue.textContent = fogTurbulence.value;
   fogFeatherValue.textContent = fogFeather.value;
   fogDriftValue.textContent = Number(fogDrift.value).toFixed(2);
+  const normalizedAngle = ((Math.round(Number(fogAngle.value) || 0) % 360) + 360) % 360;
+  fogAngle.value = String(normalizedAngle);
+  fogAngleSlider.value = String(normalizedAngle);
   document.querySelector("#directionLabel").textContent = "霧の流れる方向";
   directionControl.classList.remove("is-hidden");
 }
@@ -1263,7 +1281,10 @@ function applyFogRecipeDefaults(recipe) {
   fogTurbulence.value = defaults.turbulence ?? 58;
   fogFeather.value = defaults.feather ?? 18;
   fogDrift.value = defaults.drift ?? 0.48;
+  fogAngle.value = "0";
+  fogAngleSlider.value = "0";
   fogSeed.value = recipe.seed ?? 8127;
+  resetFogSeedHistory(fogSeed.value);
   updateFogControls();
 }
 
@@ -1655,12 +1676,71 @@ function replayFromControl(control) {
   document.querySelector("#count"),
 ].forEach((el) => el.addEventListener("input", () => replayFromControl(el)));
 
-[fogScale, fogDensity, fogTurbulence, fogFeather, fogDrift, fogSeed].forEach((control) =>
+[fogScale, fogDensity, fogTurbulence, fogFeather, fogDrift].forEach((control) =>
   control.addEventListener("input", () => {
     updateFogControls();
     replayFromControl(control);
   }),
 );
+
+function applyFogAngle(value) {
+  const normalized = ((Math.round(Number(value) || 0) % 360) + 360) % 360;
+  fogAngle.value = String(normalized);
+  fogAngleSlider.value = String(normalized);
+  replayFromControl(fogAngle);
+  refreshAutomaticFileName();
+}
+fogAngleSlider.addEventListener("input", () => applyFogAngle(fogAngleSlider.value));
+fogAngle.addEventListener("input", () => applyFogAngle(fogAngle.value));
+direction.addEventListener("change", () => {
+  if (!selectedCompoundRecipe()?.id?.startsWith("fog-")) return;
+  applyFogAngle({ right: 0, down: 90, left: 180, up: 270 }[direction.value] ?? 0);
+});
+
+const FOG_SEED_HISTORY_LIMIT = 30;
+let fogSeedHistory = [];
+let fogSeedHistoryIndex = -1;
+function updateFogSeedHistoryButtons() {
+  fogSeedPrevious.disabled = fogSeedHistoryIndex <= 0;
+  fogSeedNext.disabled = fogSeedHistoryIndex < 0 || fogSeedHistoryIndex >= fogSeedHistory.length - 1;
+}
+function resetFogSeedHistory(seed) {
+  fogSeedHistory = [Math.max(0, Math.round(Number(seed) || 0))];
+  fogSeedHistoryIndex = 0;
+  updateFogSeedHistoryButtons();
+}
+function commitFogSeed(seed) {
+  const normalized = Math.max(0, Math.min(2147483647, Math.round(Number(seed) || 0)));
+  if (fogSeedHistory[fogSeedHistoryIndex] !== normalized) {
+    fogSeedHistory = fogSeedHistory.slice(0, fogSeedHistoryIndex + 1);
+    fogSeedHistory.push(normalized);
+    if (fogSeedHistory.length > FOG_SEED_HISTORY_LIMIT) fogSeedHistory.shift();
+    fogSeedHistoryIndex = fogSeedHistory.length - 1;
+  }
+  fogSeed.value = String(normalized);
+  updateFogSeedHistoryButtons();
+  replayFromControl(fogSeed);
+  refreshAutomaticFileName();
+}
+function moveFogSeedHistory(offset) {
+  const next = Math.max(0, Math.min(fogSeedHistory.length - 1, fogSeedHistoryIndex + offset));
+  if (next === fogSeedHistoryIndex) return;
+  fogSeedHistoryIndex = next;
+  fogSeed.value = String(fogSeedHistory[next]);
+  updateFogSeedHistoryButtons();
+  replayFromControl(fogSeed);
+  refreshAutomaticFileName();
+}
+fogSeed.addEventListener("input", () => replayFromControl(fogSeed));
+fogSeed.addEventListener("change", () => commitFogSeed(fogSeed.value));
+fogSeedPrevious.addEventListener("click", () => moveFogSeedHistory(-1));
+fogSeedNext.addEventListener("click", () => moveFogSeedHistory(1));
+fogSeedRandom.addEventListener("click", () => {
+  const values = new Uint32Array(1);
+  if (globalThis.crypto?.getRandomValues) globalThis.crypto.getRandomValues(values);
+  else values[0] = Math.floor(Math.random() * 0x80000000);
+  commitFogSeed(values[0] & 0x7fffffff);
+});
 
 const colorPickers = [color, multiIrisColor1, multiIrisColor2, multiIrisColor3];
 function replayFromColorPicker() {
@@ -1968,6 +2048,7 @@ function exportState() {
     fogTurbulence: Number(fogTurbulence.value),
     fogFeather: Number(fogFeather.value),
     fogDrift: Number(fogDrift.value),
+    fogAngle: Number(fogAngle.value),
     zoomDirection: zoomDirection.value,
     blinkPattern: blinkPattern.value,
     blinkBalance: blinkBalance.value,
@@ -2115,7 +2196,8 @@ function updateExportControls() {
     exportFormat.value,
   );
   const browserWebp = ["webp", "ccfset-webp"].includes(exportFormat.value);
-  const advancedWebp = exportFormat.value === "webp" && advancedBrowserOptimization.checked;
+  const fogWebp = exportFormat.value === "webp" && selectedCompoundRecipe()?.id?.startsWith("fog-");
+  const advancedWebp = exportFormat.value === "webp" && (advancedBrowserOptimization.checked || fogWebp);
   ccfSetPreview.hidden = !["ccfset-apng", "ccfset-webp"].includes(exportFormat.value);
   integratedSetPreviewDock.hidden =
     exportDockToggle.getAttribute("aria-pressed") !== "true" || ccfSetPreview.hidden;
@@ -2141,7 +2223,7 @@ function updateExportControls() {
     "ccfset-apng":
       "OUT（透明→幕）＋HOLD（固定PNG）＋IN（OUTの挙動反転）をZIP化。GitHub Pages対応。",
     "ccfset-webp":
-      "OUT（透明→幕）＋HOLD（固定PNG）＋IN（OUTの挙動反転）をブラウザ内で作成してZIP化。容量上限はOUTとINの各ファイルに適用します。",
+      "OUT（透明→幕）＋HOLD（固定PNG）＋IN（OUTの挙動反転）をZIP化。容量指定時はZIP全体を目標に、OUTとINの画質・FPS・解像度を自動調整します。",
     pngzip:
       "各フレームをPNGでZIP化。GitHub Pages・ブラウザ単体で書き出し可能。",
   };
@@ -2158,6 +2240,8 @@ function updateExportControls() {
   const priorityHelp = document.querySelector("#optimizationPriorityHelp");
   priorityHelp.textContent = browserWebp && !advancedWebp
     ? "標準：幅/高さとFPSは維持し、圧縮品質だけを調整します。目標を超えた場合は警告します。"
+    : fogWebp
+      ? `霧は高圧縮負荷のため、容量指定時は${priorityGuides[exportPriority.value]} 希望サイズ・FPSから必要な分だけ下げて探索します。`
     : browserWebp
       ? `発展的：${priorityGuides[exportPriority.value]} 目標以下になるまでブラウザ内で探索します。`
     : priorityGuides[exportPriority.value];
@@ -2326,7 +2410,10 @@ function buildAutomaticFileName() {
     valueName(stripeStaggerPattern.value, { linear: "一定間隔", ease: "なめらかな間隔", alternating: "交互", random: "ランダム風" }),
   );
   if (selectedCompoundRecipe()?.id?.startsWith("fog-")) {
-    details.push(valueName(direction.value, { right: "左から右", left: "右から左", down: "上から下", up: "下から上" }));
+    details.push(
+      japanese ? `角度${fogAngle.value}度` : `${fogAngle.value}deg`,
+      `seed${fogSeed.value}`,
+    );
   }
   if (effectiveKind() === "iris") details.push(valueName(irisDirection.value, { "inside-out": "中央から外", "outside-in": "外から中央" }), valueName(irisTiming.value, { standard: "標準", linear: "線形", "soft-accelerated": "なだらか加速", accelerated: "加速" }));
   if (effectiveKind() === "multi-iris") details.push(japanese ? `${multiIrisLayers.value}層` : `${multiIrisLayers.value}layers`, valueName(irisTiming.value, { standard: "標準", linear: "線形", "soft-accelerated": "なだらか加速", accelerated: "加速" }));
@@ -2603,9 +2690,14 @@ exportButton.addEventListener("click", async () => {
       renderTimings,
       progressStart = 0,
       progressSpan = 1,
+      targetOverride = null,
     ) => {
-      const targetBytes = requestedTargetBytes;
-      const advanced = requestedFormat === "webp" && advancedBrowserOptimization.checked && targetBytes > 0;
+      const targetBytes = targetOverride ?? requestedTargetBytes;
+      const advanced = targetBytes > 0 && (
+        requestedFormat === "ccfset-webp" ||
+        renderState.recipeId?.startsWith("fog-") ||
+        (requestedFormat === "webp" && advancedBrowserOptimization.checked)
+      );
       const makeFrames = (safeTimings) => safeTimings.map((timing) => ({
         delayMs: timing.delayMs,
         getImageData: async () => {
@@ -2620,19 +2712,18 @@ exportButton.addEventListener("click", async () => {
           onProgress: (value) => { exportProgress.value = progressStart + progressSpan * value; },
         });
       }
-      const weights = {
-        auto: { quality: .4, fps: .3, resolution: .3 },
-        quality: { quality: .62, fps: .15, resolution: .23 },
-        fps: { quality: .3, fps: .55, resolution: .15 },
-        resolution: { quality: .3, fps: .15, resolution: .55 },
-      }[requestedPriority];
-      const candidates = [];
-      for (const scale of [1, .9, .75, .67, .5]) for (const candidateFps of [...new Set([fps, Math.min(fps, 24), Math.min(fps, 20), Math.min(fps, 15)])]) for (const quality of [.88, .78, .68, .58, .48, .4]) {
-        const score = weights.quality * quality + weights.fps * candidateFps / fps + weights.resolution * scale;
-        candidates.push({ width: Math.max(64, Math.round(width * scale / 2) * 2), height: Math.max(64, Math.round(height * scale / 2) * 2), fps: candidateFps, quality, score });
-      }
-      candidates.sort((left, right) => right.score - left.score);
-      const searchCandidates = [...candidates.slice(0, 31), candidates.at(-1)];
+      const profiles = {
+        auto: [[1, 30, .64], [.75, 24, .56], [.67, 20, .48], [.5, 15, .36], [.4, 12, .24]],
+        quality: [[1, 30, .76], [.75, 24, .68], [.67, 20, .6], [.5, 15, .5], [.4, 12, .4]],
+        fps: [[1, 30, .52], [.75, 30, .44], [.67, 30, .36], [.5, 30, .28], [.4, 24, .2]],
+        resolution: [[1, 30, .44], [1, 24, .36], [1, 20, .28], [.9, 15, .22], [.75, 12, .16]],
+      };
+      const searchCandidates = (profiles[requestedPriority] || profiles.auto).map(([scale, preferredFps, quality]) => ({
+        width: Math.max(64, Math.round(width * scale / 2) * 2),
+        height: Math.max(64, Math.round(height * scale / 2) * 2),
+        fps: Math.max(5, Math.min(fps, preferredFps)),
+        quality,
+      }));
       let last = null;
       for (let attempt = 0; attempt < searchCandidates.length; attempt += 1) {
         const candidate = searchCandidates[attempt];
@@ -2721,11 +2812,15 @@ exportButton.addEventListener("click", async () => {
       let inBytes;
       let animationExtension;
       if (requestedFormat === "ccfset-webp") {
+        const setTargetBytes = requestedTargetBytes > 0
+          ? Math.max(1, Math.floor((requestedTargetBytes - 16 * 1024) / 2))
+          : 0;
         const outEncoded = await makeWebp(
           outState,
           frameTimesWithEndpoints(outDuration, fps, outState),
           0,
           0.45,
+          setTargetBytes,
         );
         outBytes = outEncoded.bytes;
         const inEncoded = await makeWebp(
@@ -2733,12 +2828,13 @@ exportButton.addEventListener("click", async () => {
           frameTimesWithEndpoints(inDuration, fps, inState),
           0.5,
           0.45,
+          setTargetBytes,
         );
         inBytes = inEncoded.bytes;
         encodedMetadata = {
-          width,
-          height,
-          fps,
+          width: Math.min(outEncoded.width || width, inEncoded.width || width),
+          height: Math.min(outEncoded.height || height, inEncoded.height || height),
+          fps: Math.min(outEncoded.fps || fps, inEncoded.fps || fps),
           attempts: outEncoded.attempts + inEncoded.attempts,
           exceeded: outEncoded.exceeded || inEncoded.exceeded,
         };

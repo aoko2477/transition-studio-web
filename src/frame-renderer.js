@@ -370,6 +370,7 @@ function renderCompoundPreset(ctx, width, height, state, motion) {
     drawProceduralFog(ctx, width, height, q, state.color, opacity, {
       variant,
       direction: state.direction,
+      angle: state.fogAngle,
       seed: state.fogSeed,
       scale: state.fogScale,
       density: state.fogDensity,
