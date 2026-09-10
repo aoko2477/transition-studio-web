@@ -2,6 +2,7 @@ import {
   frameTimes,
   frameTimesWithEndpoints,
   renderTransitionFrame,
+  stingerTransitionPointMs,
 } from "./frame-renderer.js";
 import { encodeApng, encodePng, encodeSolidPng, encodeZip } from "./media-encoders.js";
 import { analyzeFrames, decodeAnimation } from "./media-inspector.js";
@@ -243,6 +244,8 @@ app.innerHTML = `
                 <rect id="timelineHoldArea" class="timeline-area hold" y="0" height="86" />
                 <rect id="timelineExitArea" class="timeline-area exit" y="0" height="86" />
                 <path id="timelineCurve" class="timeline-curve" />
+                <line id="timelineTransitionPoint" class="timeline-transition-point is-hidden" y1="0" y2="86" />
+                <text id="timelineTransitionPointLabel" class="timeline-transition-point-label is-hidden" y="82">TP</text>
                 <line id="timelinePlayhead" class="timeline-playhead" y1="0" y2="86" />
                 <circle id="timelineStartPoint" class="timeline-point" r="7" />
                 <circle id="timelineCoverPoint" class="timeline-point" r="7" />
@@ -624,6 +627,8 @@ const timelineEnterArea = document.querySelector("#timelineEnterArea");
 const timelineHoldArea = document.querySelector("#timelineHoldArea");
 const timelineExitArea = document.querySelector("#timelineExitArea");
 const timelineCurve = document.querySelector("#timelineCurve");
+const timelineTransitionPoint = document.querySelector("#timelineTransitionPoint");
+const timelineTransitionPointLabel = document.querySelector("#timelineTransitionPointLabel");
 const timelinePlayhead = document.querySelector("#timelinePlayhead");
 const timelineStartPoint = document.querySelector("#timelineStartPoint");
 const timelineCoverPoint = document.querySelector("#timelineCoverPoint");
@@ -1091,6 +1096,24 @@ function renderPreviewTimeline(total, enter, hold, isRoundtrip) {
       ? Number(timelineEndOpacity.value)
       : 0
     : coverAlpha;
+  const hasTransitionPoint = isRoundtrip && hold > 0 && coverAlpha >= 99.9;
+  const transitionPoint = hasTransitionPoint
+    ? stingerTransitionPointMs(enter, hold)
+    : null;
+  const transitionPointX = transitionPoint === null
+    ? 0
+    : (transitionPoint / total) * 1000;
+  timelineTransitionPoint.classList.toggle("is-hidden", !hasTransitionPoint);
+  timelineTransitionPointLabel.classList.toggle("is-hidden", !hasTransitionPoint);
+  timelineTransitionPoint.setAttribute("x1", transitionPointX);
+  timelineTransitionPoint.setAttribute("x2", transitionPointX);
+  timelineTransitionPointLabel.setAttribute(
+    "x",
+    Math.min(930, Math.max(8, transitionPointX + 8)),
+  );
+  timelineTransitionPointLabel.textContent = transitionPoint === null
+    ? "TP"
+    : `TP ${transitionPoint}ms`;
   const y = (alpha) => 76 - (Math.max(0, Math.min(100, alpha)) / 100) * 52;
   const curveSegment = (x0, y0, x1, y1, points) => {
     const [x1Control, y1Control, x2Control, y2Control] = points;
@@ -1388,9 +1411,14 @@ function updateRoundtripTiming() {
   const endAlpha = advancedTimeline.checked
     ? Math.max(0, Math.min(100, Number(timelineEndOpacity.value))) / 100
     : 0;
+  const transitionPoint = coverAlpha >= 0.999 && hold > 0
+    ? stingerTransitionPointMs(enter, hold)
+    : null;
   coverageStatus.textContent =
     coverAlpha >= 0.999
-      ? "全面被覆／安全な切替区間"
+      ? transitionPoint === null
+        ? "全面被覆／保持時間を設けるとTPを表示"
+        : `全面被覆／TP ${transitionPoint}ms`
       : `黒幕 ${Math.round(coverAlpha * 100)}%／OBS切替には非推奨`;
   coverageStatus.classList.toggle("unsafe", coverAlpha < 0.999);
   const total = enter + hold + exitDurationMs;
@@ -1730,10 +1758,14 @@ forceOpaque.addEventListener("input", () => {
 advancedTimeline.addEventListener("input", () => {
   if (advancedTimeline.checked) forceOpaque.checked = false;
   replay();
+  refreshAutomaticFileName();
 });
 matchTimelineEndOpacity.addEventListener("input", replay);
 [timelineStartOpacity, timelineCoverOpacity, timelineEndOpacity].forEach(
-  (input) => input.addEventListener("input", () => replayFromControl(input)),
+  (input) => input.addEventListener("input", () => {
+    replayFromControl(input);
+    refreshAutomaticFileName();
+  }),
 );
 document.querySelector("#play").addEventListener("click", replay);
 previewToggle.addEventListener("click", () => {
@@ -2152,6 +2184,7 @@ chooseExportDirectory.hidden = true;
 exportDirectoryStatus.hidden = true;
 
 exportFormat.addEventListener("input", updateExportControls);
+exportFormat.addEventListener("input", refreshAutomaticFileName);
 exportTarget.addEventListener("input", updateExportControls);
 exportPriority.addEventListener("input", updateExportControls);
 advancedBrowserOptimization.addEventListener("input", updateExportControls);
@@ -2230,6 +2263,14 @@ function buildAutomaticFileName() {
       valueName(blinkBalance.value, { center: "上下均等", natural: "人のまぶた比率" }),
       japanese ? `ぼかし${Number(blinkFeather.value) || 0}％` : `feather${Number(blinkFeather.value) || 0}pct`,
     );
+  const singleStinger = opacityMode.value === "roundtrip" &&
+    !["ccfset-webp", "ccfset-apng"].includes(exportFormat.value);
+  const fullyCovered = !advancedTimeline.checked || Number(timelineCoverOpacity.value) >= 99.9;
+  const holdMs = Math.max(0, Number(holdDuration.value) * 1000 || 0);
+  if (singleStinger && fullyCovered && holdMs > 0) {
+    const enterMs = Math.max(100, Number(enterDuration.value) * 1000 || 1000);
+    details.push(`TP${stingerTransitionPointMs(enterMs, holdMs)}ms`);
+  }
   const seconds = Number(totalExportSeconds().toFixed(2));
   return [
     japanese ? (kindNames[effectiveKind()] || effectiveKind()) : effectiveKind(),
@@ -2788,6 +2829,10 @@ function renderInspection() {
       button.title = `透明 ${(detail.transparentRatio * 100).toFixed(1)}% / 不透明 ${(detail.opaqueRatio * 100).toFixed(1)}% / ${detail.delayMs}ms`;
       if (detail.fullyTransparent) button.dataset.state = "transparent";
       if (detail.fullyCovered) button.dataset.state = "covered";
+      if (detail.index + 1 === inspectedAnalysis.recommendedFrame) {
+        button.classList.add("transition-point");
+        button.title += ` / TP ${inspectedAnalysis.recommendedCutMs}ms`;
+      }
       button.addEventListener("click", () => showInspectedFrame(detail.index));
       return button;
     }),

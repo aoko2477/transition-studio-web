@@ -147,11 +147,14 @@ button:disabled { opacity: .42; cursor: not-allowed; }
 .timeline-area.enter, .timeline-area.exit { fill: #244d55; }
 .timeline-area.hold { fill: #263237; }
 .timeline-curve { fill: none; stroke: #72d7df; stroke-width: 4; vector-effect: non-scaling-stroke; }
+.timeline-transition-point { stroke: #f2bd4b; stroke-width: 2; stroke-dasharray: 5 3; vector-effect: non-scaling-stroke; pointer-events: none; }
+.timeline-transition-point-label { fill: #f2bd4b; font: 700 11px "Segoe UI", sans-serif; pointer-events: none; }
 .timeline-playhead { stroke: #fff; stroke-width: 2; vector-effect: non-scaling-stroke; pointer-events: none; }
 .timeline-point { display: none; fill: #15191b; stroke: #fff; stroke-width: 3; vector-effect: non-scaling-stroke; cursor: ns-resize; }
 .preview-timeline[data-editable="true"] .timeline-point { display: block; }
 .timeline-label { fill: #a8c6ca; font: 11px "Segoe UI", sans-serif; pointer-events: none; }
 .preview-timeline input[type="range"] { margin: 0; }
+.frame-timeline button.transition-point { outline: 2px solid #f2bd4b; outline-offset: -2px; color: #f2bd4b; }
 .transition-layer { position: absolute; inset: 0; --c: #111; --d: 1000ms; --e: ease-in-out; --from-opacity: 0; --to-opacity: 1; pointer-events: none; }
 .transition-layer::before, .transition-layer::after { content: ""; position: absolute; inset: 0; background: var(--c); }
 .transition-layer[data-kind="compound"]::before, .transition-layer[data-kind="compound"]::after { display: none; }

@@ -1,6 +1,10 @@
 const clamp01 = (value) => Math.max(0, Math.min(1, value));
 const lerp = (from, to, progress) => from + (to - from) * progress;
 
+export function stingerTransitionPointMs(enterMs, holdMs) {
+  return Math.round(Math.max(0, Number(enterMs) || 0) + Math.max(0, Number(holdMs) || 0) / 2);
+}
+
 function cubicBezierAt(progress, points = [.42, 0, .58, 1]) {
   if (progress <= 0) return 0;
   if (progress >= 1) return 1;
