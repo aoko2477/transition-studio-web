@@ -51,9 +51,23 @@ app.innerHTML = `
               <optgroup label="多層">
                 <option value="multi-iris">多層アイリス</option>
               </optgroup>
+              <optgroup label="実験中">
+                <option value="compound-fogFill">霧・フィル β</option>
+                <option value="compound-fogSweep">霧・スイープ β</option>
+                <option value="compound-fogBloom">霧・ブルーム β</option>
+              </optgroup>
             </select>
           </label>
           <p class="preset-summary" id="presetSummary"></p>
+          <div id="fogControls" class="is-hidden">
+            <div class="warning"><strong>実験中：</strong>霧パターンは見た目・容量・速度を比較するための試作です。</div>
+            <label>霧の大きさ <input id="fogScale" type="range" min="1" max="8" step="0.1" value="3.4" /><output id="fogScaleValue">3.4</output></label>
+            <label>霧の濃さ <input id="fogDensity" type="range" min="0" max="100" step="1" value="55" /><output id="fogDensityValue">55</output></label>
+            <label>揺らぎ <input id="fogTurbulence" type="range" min="0" max="100" step="1" value="58" /><output id="fogTurbulenceValue">58</output></label>
+            <label>縁の柔らかさ <input id="fogFeather" type="range" min="0" max="100" step="1" value="18" /><output id="fogFeatherValue">18</output></label>
+            <label>流れ <input id="fogDrift" type="range" min="0" max="1.5" step="0.01" value="0.48" /><output id="fogDriftValue">0.48</output></label>
+            <label>Seed <input id="fogSeed" type="number" min="0" max="2147483647" step="1" value="8127" /></label>
+          </div>
           <label id="blinkPatternControl">まばたき動作
             <select id="blinkPattern"><option value="single">ゆっくり閉じる</option><option value="double">1回ぱちっ → 本閉じ</option></select>
             <small id="blinkTimingHint">推奨：ゆっくり閉じ1.5秒・保持0.1秒・開き1.8秒</small>
@@ -526,6 +540,18 @@ const radialDirectionControl = document.querySelector("#radialDirectionControl")
 const radialDirection = document.querySelector("#radialDirection");
 const edgeControl = document.querySelector("#edgeControl");
 const presetSummary = document.querySelector("#presetSummary");
+const fogControls = document.querySelector("#fogControls");
+const fogScale = document.querySelector("#fogScale");
+const fogDensity = document.querySelector("#fogDensity");
+const fogTurbulence = document.querySelector("#fogTurbulence");
+const fogFeather = document.querySelector("#fogFeather");
+const fogDrift = document.querySelector("#fogDrift");
+const fogSeed = document.querySelector("#fogSeed");
+const fogScaleValue = document.querySelector("#fogScaleValue");
+const fogDensityValue = document.querySelector("#fogDensityValue");
+const fogTurbulenceValue = document.querySelector("#fogTurbulenceValue");
+const fogFeatherValue = document.querySelector("#fogFeatherValue");
+const fogDriftValue = document.querySelector("#fogDriftValue");
 const blinkEffectNote = document.querySelector("#blinkEffectNote");
 const previewTitle = document.querySelector("#previewTitle");
 const stage = document.querySelector("#stage");
@@ -659,6 +685,9 @@ const presetDetails = {
   tile: ["タイル", "格子を順番に埋める"],
   radial: ["ラジアル", "時計回りに画面を覆う"],
   zoom: ["ズーム", "中央または外周を起点に拡大・収縮して覆う"],
+  "compound-fogFill": ["霧・フィル［実験］", "揺らぐ霧が画面全体へ広がり、最後は単色へ収束"],
+  "compound-fogSweep": ["霧・スイープ［実験］", "流れる霧が一方向から侵入して画面を覆う"],
+  "compound-fogBloom": ["霧・ブルーム［実験］", "複数地点から霧が湧き、重なりながら全面を覆う"],
   "compound-softFocusFade": [
     "ソフトフォーカス・フェード",
     "幕の濃度と柔らかな白い霞を重ねる",
@@ -1010,7 +1039,7 @@ function renderCompoundFrame(timeMs) {
         ? `blur(${Math.sin(Math.PI * state.progress) * 8}px)`
         : "";
 
-  if (["soft-focus-fade", "ink-bloom", "slash-cut"].includes(recipe.id)) {
+  if (["soft-focus-fade", "ink-bloom", "slash-cut", "fog-fill", "fog-sweep", "fog-bloom"].includes(recipe.id)) {
     stageBackdrop.style.transform = "";
     stageBackdrop.style.filter = "";
     const renderState = exportState();
@@ -1212,6 +1241,32 @@ function updatePreviewBackground() {
   stage.style.setProperty("--preview-background", previewBackgroundColor.value);
 }
 
+function updateFogControls() {
+  const recipe = selectedCompoundRecipe();
+  const isFog = Boolean(recipe?.id?.startsWith("fog-"));
+  fogControls.classList.toggle("is-hidden", !isFog);
+  if (!isFog) return;
+  fogScaleValue.textContent = Number(fogScale.value).toFixed(1);
+  fogDensityValue.textContent = fogDensity.value;
+  fogTurbulenceValue.textContent = fogTurbulence.value;
+  fogFeatherValue.textContent = fogFeather.value;
+  fogDriftValue.textContent = Number(fogDrift.value).toFixed(2);
+  document.querySelector("#directionLabel").textContent = "霧の流れる方向";
+  directionControl.classList.remove("is-hidden");
+}
+
+function applyFogRecipeDefaults(recipe) {
+  if (!recipe?.id?.startsWith("fog-")) return;
+  const defaults = recipe.defaults || {};
+  fogScale.value = defaults.scale ?? 3.4;
+  fogDensity.value = defaults.density ?? 55;
+  fogTurbulence.value = defaults.turbulence ?? 58;
+  fogFeather.value = defaults.feather ?? 18;
+  fogDrift.value = defaults.drift ?? 0.48;
+  fogSeed.value = recipe.seed ?? 8127;
+  updateFogControls();
+}
+
 function updateOpacityControls() {
   const presets = {
     roundtrip: [0, 0],
@@ -1353,6 +1408,7 @@ function updateOpacityControls() {
     baseKind !== "blink" || Boolean(selectedCompoundRecipe()),
   );
   edgeControl.classList.add("is-hidden");
+  updateFogControls();
   placePrimaryControls();
 }
 
@@ -1599,6 +1655,13 @@ function replayFromControl(control) {
   document.querySelector("#count"),
 ].forEach((el) => el.addEventListener("input", () => replayFromControl(el)));
 
+[fogScale, fogDensity, fogTurbulence, fogFeather, fogDrift, fogSeed].forEach((control) =>
+  control.addEventListener("input", () => {
+    updateFogControls();
+    replayFromControl(control);
+  }),
+);
+
 const colorPickers = [color, multiIrisColor1, multiIrisColor2, multiIrisColor3];
 function replayFromColorPicker() {
   replay({ preserveControlLayout: true });
@@ -1714,6 +1777,7 @@ kind.addEventListener("input", () => {
   if (recipe) {
     duration.value = (recipe.durationMs / 1000).toFixed(1);
     forceOpaque.checked = baseKind !== "fade";
+    applyFogRecipeDefaults(recipe);
   }
   replay();
 });
@@ -1898,6 +1962,12 @@ function exportState() {
     multiIrisStagger: Number(multiIrisStagger.value) / 100,
     multiIrisColors: [multiIrisColor1.value, multiIrisColor2.value, multiIrisColor3.value],
     edgeFeatherPercent: Number(edgeFeather.value),
+    fogSeed: Number(fogSeed.value) || selectedCompoundRecipe()?.seed || 8127,
+    fogScale: Number(fogScale.value),
+    fogDensity: Number(fogDensity.value),
+    fogTurbulence: Number(fogTurbulence.value),
+    fogFeather: Number(fogFeather.value),
+    fogDrift: Number(fogDrift.value),
     zoomDirection: zoomDirection.value,
     blinkPattern: blinkPattern.value,
     blinkBalance: blinkBalance.value,
@@ -2242,6 +2312,7 @@ function buildAutomaticFileName() {
     fade: "フェード", wipe: "ワイプ", split: "スプリット", blink: "まばたき",
     iris: "アイリス", "multi-iris": "多層アイリス", stripe: "ストライプ",
     tile: "タイル", radial: "ラジアル", zoom: "ズーム",
+    "fog-fill": "霧フィル", "fog-sweep": "霧スイープ", "fog-bloom": "霧ブルーム",
   };
   const valueName = (value, names) => japanese ? (names[value] || value) : value;
   const details = [];
@@ -2254,6 +2325,9 @@ function buildAutomaticFileName() {
     japanese ? `開始ずれ${Number(stripeStagger.value) || 0}%` : `stagger${Number(stripeStagger.value) || 0}pct`,
     valueName(stripeStaggerPattern.value, { linear: "一定間隔", ease: "なめらかな間隔", alternating: "交互", random: "ランダム風" }),
   );
+  if (selectedCompoundRecipe()?.id?.startsWith("fog-")) {
+    details.push(valueName(direction.value, { right: "左から右", left: "右から左", down: "上から下", up: "下から上" }));
+  }
   if (effectiveKind() === "iris") details.push(valueName(irisDirection.value, { "inside-out": "中央から外", "outside-in": "外から中央" }), valueName(irisTiming.value, { standard: "標準", linear: "線形", "soft-accelerated": "なだらか加速", accelerated: "加速" }));
   if (effectiveKind() === "multi-iris") details.push(japanese ? `${multiIrisLayers.value}層` : `${multiIrisLayers.value}layers`, valueName(irisTiming.value, { standard: "標準", linear: "線形", "soft-accelerated": "なだらか加速", accelerated: "加速" }));
   if (effectiveKind() === "zoom") details.push(valueName(zoomDirection.value, { "center-out": "中央から外", "outside-in": "外から中央" }));
@@ -2273,7 +2347,9 @@ function buildAutomaticFileName() {
   }
   const seconds = Number(totalExportSeconds().toFixed(2));
   return [
-    japanese ? (kindNames[effectiveKind()] || effectiveKind()) : effectiveKind(),
+    japanese
+      ? (kindNames[selectedCompoundRecipe()?.id || effectiveKind()] || selectedCompoundRecipe()?.id || effectiveKind())
+      : (selectedCompoundRecipe()?.id || effectiveKind()),
     mode,
     ...details,
     japanese ? `${seconds}秒` : `${seconds}s`,
@@ -3089,6 +3165,12 @@ const presetFields = [
   "blinkFeather",
   "radialStart",
   "radialDirection",
+  "fogScale",
+  "fogDensity",
+  "fogTurbulence",
+  "fogFeather",
+  "fogDrift",
+  "fogSeed",
 ];
 document.querySelector("#savePreset").addEventListener("click", () => {
   const values = Object.fromEntries(
