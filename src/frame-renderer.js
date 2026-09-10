@@ -1,3 +1,5 @@
+import { drawProceduralFog } from './procedural-fog.js';
+
 const clamp01 = (value) => Math.max(0, Math.min(1, value));
 const lerp = (from, to, progress) => from + (to - from) * progress;
 
@@ -361,6 +363,21 @@ function renderCompoundPreset(ctx, width, height, state, motion) {
       ctx.fillRect(0, 0, width, height);
     }
     ctx.restore();
+    return;
+  }
+  if (state.recipeId?.startsWith('fog-')) {
+    const variant = state.recipeId === 'fog-sweep' ? 'sweep' : state.recipeId === 'fog-bloom' ? 'bloom' : 'fill';
+    drawProceduralFog(ctx, width, height, q, state.color, opacity, {
+      variant,
+      direction: state.direction,
+      angle: state.fogAngle,
+      seed: state.fogSeed,
+      scale: state.fogScale,
+      density: state.fogDensity,
+      turbulence: state.fogTurbulence,
+      feather: state.fogFeather,
+      drift: state.fogDrift,
+    });
     return;
   }
   if (state.recipeId === 'slash-cut') {

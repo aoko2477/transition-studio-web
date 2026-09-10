@@ -95,4 +95,39 @@ export const COMPOUND_RECIPES = Object.freeze({
       { family: 'finish', primitive: 'scaleSettle', window: [1600, 3400], easing: 'smooth', from: 1.04, to: 1 },
     ],
   },
+  fogFill: {
+    version: 1, id: 'fog-fill', name: '霧・フィル', durationMs: 2000, fps: 30, seed: 8127,
+    status: 'experimental',
+    defaults: { scale: 3.4, density: 55, turbulence: 58, feather: 18, drift: .48 },
+    exportHints: { complexity: 'high', webpCost: 'high', preferDetailReduction: true, minimumRecommendedFps: 20 },
+    layers: [
+      { family: 'proceduralField', primitive: 'deterministicFogNoise', window: [0, 2000], easing: 'smooth' },
+      { family: 'baseMask', primitive: 'fog', window: [0, 1850], easing: 'smooth', variant: 'fill' },
+      { family: 'finish', primitive: 'uniformCover', window: [1600, 2000], easing: 'smooth' },
+    ],
+  },
+  fogSweep: {
+    version: 1, id: 'fog-sweep', name: '霧・スイープ', durationMs: 1800, fps: 30, seed: 8137,
+    status: 'experimental',
+    defaults: { scale: 3.8, density: 52, turbulence: 64, feather: 16, drift: .62 },
+    exportHints: { complexity: 'high', webpCost: 'high', preferDetailReduction: true, minimumRecommendedFps: 20 },
+    layers: [
+      { family: 'proceduralField', primitive: 'deterministicFogNoise', window: [0, 1800], easing: 'smooth' },
+      { family: 'baseMask', primitive: 'fog', window: [0, 1700], easing: 'smooth', variant: 'sweep' },
+      { family: 'secondary', primitive: 'directionalDrift', window: [0, 1800], easing: 'smooth' },
+      { family: 'finish', primitive: 'uniformCover', window: [1450, 1800], easing: 'smooth' },
+    ],
+  },
+  fogBloom: {
+    version: 1, id: 'fog-bloom', name: '霧・ブルーム', durationMs: 2100, fps: 30, seed: 8147,
+    status: 'experimental',
+    defaults: { scale: 3.0, density: 58, turbulence: 52, feather: 22, drift: .36 },
+    exportHints: { complexity: 'high', webpCost: 'high', preferDetailReduction: true, minimumRecommendedFps: 20 },
+    layers: [
+      { family: 'proceduralField', primitive: 'deterministicFogNoise', window: [0, 2100], easing: 'smooth' },
+      { family: 'baseMask', primitive: 'fog', window: [0, 1950], easing: 'smooth', variant: 'bloom' },
+      { family: 'secondary', primitive: 'multiSourceBloom', window: [0, 1500], easing: 'easeOut', count: 5 },
+      { family: 'finish', primitive: 'uniformCover', window: [1700, 2100], easing: 'smooth' },
+    ],
+  },
 });
