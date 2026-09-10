@@ -3,7 +3,7 @@ import {
   frameTimesWithEndpoints,
   renderTransitionFrame,
 } from "./frame-renderer.js";
-import { encodeApng, encodePng, encodeZip } from "./media-encoders.js";
+import { encodeApng, encodePng, encodeSolidPng, encodeZip } from "./media-encoders.js";
 import { analyzeFrames, decodeAnimation } from "./media-inspector.js";
 import {
   COMPOUND_RECIPES,
@@ -106,7 +106,7 @@ app.innerHTML = `
           </div>
           <label class="check-control" id="forceOpaqueControl"><input id="forceOpaque" type="checkbox" checked /> 図形を常に100%不透明で描画</label>
           <div class="obs-controls" id="obsControls">
-            <small class="mode-hint">現在はWebP・APNG・PNG連番で書き出します。OBS向けWebMはローカル版に実装予定です。「入り → 保持 → 抜け」の連続素材として利用できます。</small>
+            <small id="obsFormatHint" class="mode-hint">現在はWebP・APNG・PNG連番で書き出します。OBS向けWebMはローカル版に実装予定です。「入り → 保持 → 抜け」の連続素材として利用できます。</small>
             <div class="timing-inputs">
               <label>入り <input id="enterDuration" type="number" min="0.1" max="10" step="0.1" value="1.0" /></label>
               <label>黒幕保持 <input id="holdDuration" type="number" min="0" max="10" step="0.1" value="2.0" /></label>
@@ -309,7 +309,7 @@ app.innerHTML = `
           <label title="出力先に合わせた幅・高さをまとめて設定します。軽量プリセットは容量を抑えたい場合に向きます。">解像度プリセット <select id="resolutionPreset"><option value="1920x1080">Full HD・1920×1080</option><option value="1280x720">HD・1280×720</option><option value="960x540" selected>軽量16:9・960×540</option><option value="640x360">小型16:9・640×360</option><option value="3840x2160">4K・3840×2160</option><option value="1080x1080">正方形・1080×1080</option><option value="1000x1000">正方形・1000×1000</option><option value="custom">カスタム</option></select></label>
           <div class="export-dimensions"><label title="書き出す画像の横幅です。大きいほど細部を保てますが容量が増えます。">幅 <input id="exportWidth" type="number" min="64" max="3840" step="2" value="960"></label><label title="書き出す画像の高さです。大きいほど細部を保てますが容量が増えます。">高さ <input id="exportHeight" type="number" min="64" max="2160" step="2" value="540"></label><label title="1秒あたりのフレーム数です。30fpsは容量とのバランス、60fpsは滑らかさを優先します。">FPS <input id="exportFps" type="number" min="5" max="60" value="30"></label></div>
           <small class="field-help" title="FPSを上げるほどフレーム数が増えるため、同じ画質・解像度ではファイル容量も増えやすくなります。">30fps：標準・容量を抑えやすい ／ 60fps：よりなめらか・容量増</small>
-          <label id="exportTargetControl" title="Animated WebPの目標容量です。1MBは安全余裕を含む約950KiBを目標にします。">容量 <select id="exportTarget"><option value="1mb" selected>1MB</option><option value="5mb">5MB</option><option value="unlimited">制限なし</option><option value="custom">任意設定</option></select></label>
+          <label id="exportTargetControl" title="Animated WebPの目標容量です。1MBは安全余裕を含む約950KiBを目標にします。3素材セットではOUTとINを別々に判定し、HOLDは含めません。">容量 <select id="exportTarget"><option value="1mb" selected>1MB</option><option value="5mb">5MB</option><option value="unlimited">制限なし</option><option value="custom">任意設定</option></select></label>
           <label id="customTargetControl" hidden>任意の上限（MiB） <input id="exportCustomTarget" type="number" min="0.1" max="100" step="0.1" value="1"></label>
           <label id="optimizationPriorityControl" title="容量上限へ収める際、画質・滑らかさ・解像度のどれを優先するか指定します。">最適化方針 <select id="exportPriority"><option value="auto" title="画質・FPS・画像サイズをバランスよく調整">自動</option><option value="quality" title="圧縮品質を優先し、必要に応じてFPS・画像サイズを下げる">画質優先</option><option value="fps" title="動きの滑らかさを優先し、圧縮品質・画像サイズを調整">FPS優先</option><option value="resolution" title="幅と高さを優先し、圧縮品質・FPSを調整">解像度優先</option></select></label>
           <label id="advancedBrowserOptimizationControl" class="check-row" title="通常は解像度とFPSを固定して圧縮品質だけを調整します。オンにすると容量内へ収めるためFPSと画像サイズも候補として探索します。"><input id="advancedBrowserOptimization" type="checkbox" /> 発展的：Web版でもFPS・画像サイズを探索</label>
@@ -449,6 +449,7 @@ const wipeDirectionSwitch = document.querySelector("#wipeDirectionSwitch");
 const opacityMode = document.querySelector("#opacityMode");
 const opacityModeSwitch = document.querySelector("#opacityModeSwitch");
 const opacityModeHint = document.querySelector("#opacityModeHint");
+const obsFormatHint = document.querySelector("#obsFormatHint");
 const adjustOpacity = document.querySelector("#adjustOpacity");
 const adjustOpacityControl = document.querySelector("#adjustOpacityControl");
 const opacityControls = document.querySelector("#opacityControls");
@@ -1234,7 +1235,10 @@ function updateOpacityControls() {
       ? "OUTを確認中。3素材セットでは反転したINも同時に書き出します。"
       : opacityMode.value === "reveal"
         ? "INを確認中。3素材セットでは反転したOUTも同時に書き出します。"
-        : "OBS向け：入り・全面被覆保持・抜けを1本で確認します。WebMはローカル版に実装予定です。";
+        : document.documentElement.dataset.edition === "local" &&
+            document.querySelector("#webmOption")?.disabled === false
+          ? "OBS向け：入り・全面被覆保持・抜けを1本で確認します。ローカル版ではWebMに書き出せます。"
+          : "OBS向け：入り・全面被覆保持・抜けを1本で確認します。WebMはローカル版に実装予定です。";
   const customOpacityEnabled =
     !fixedOpaqueGeometry &&
     opacityMode.value !== "roundtrip" &&
@@ -2065,7 +2069,10 @@ async function detectLocalWebmSupport() {
     if (!response.ok) return;
     const capabilities = await response.json();
     localEditionAvailable = capabilities.edition === "local";
-    if (localEditionAvailable) editionBadge.textContent = "v0.2 Beta・ローカル版";
+    if (localEditionAvailable) {
+      document.documentElement.dataset.edition = "local";
+      editionBadge.textContent = "v0.2 Beta・ローカル版";
+    }
     const directFolderAvailable =
       localEditionAvailable &&
       capabilities.directFolder &&
@@ -2074,9 +2081,12 @@ async function detectLocalWebmSupport() {
     if (capabilities.ffmpeg && capabilities.formats?.includes("webm")) {
       webmOption.disabled = false;
       webmOption.textContent = "WebM（VP9 alpha・ローカル）";
+      obsFormatHint.textContent = "ローカル版ではWebP・APNG・PNG連番に加えて、OBS向けVP9 alpha WebMへ書き出せます。「入り → 保持 → 抜け」の連続素材として利用できます。";
     } else if (localEditionAvailable) {
       webmOption.textContent = "WebM（FFmpegが見つかりません）";
+      obsFormatHint.textContent = "WebMを利用するにはFFmpegをPATHへ追加してください。WebP・APNG・PNG連番はそのまま書き出せます。";
     }
+    updateOpacityControls();
     updateExportControls();
   } catch {}
 }
@@ -2310,6 +2320,7 @@ async function makeEncoderPayload(
   fps,
   state,
   timings,
+  loops,
   progressStart = 0,
   progressSpan = 0.45,
 ) {
@@ -2323,7 +2334,7 @@ async function makeEncoderPayload(
           width,
           height,
           fps: effectiveFps,
-          loops: Math.max(0, Number(exportLoops.value) || 0),
+          loops,
           frames: timings.map(({ delayMs }) => ({ delayMs })),
         }),
       ),
@@ -2342,11 +2353,11 @@ async function makeEncoderPayload(
   return encodeZip(files);
 }
 
-async function requestLocalEncode(payload, format, target = 0) {
+async function requestLocalEncode(payload, format, target = 0, priority = "auto") {
   const params = new URLSearchParams({
     format,
     targetBytes: String(target),
-    priority: exportPriority.value,
+    priority,
   });
   const response = await fetch(`/api/encode?${params}`, {
     method: "POST",
@@ -2369,11 +2380,19 @@ async function requestLocalEncode(payload, format, target = 0) {
 }
 
 exportButton.addEventListener("click", async () => {
+  const requestedFormat = exportFormat.value;
+  const requestedDestination = exportDestination.value;
+  const requestedTargetBytes = optimizationTarget();
+  const requestedPriority = exportPriority.value;
+  const requestedLoops = Math.max(0, Number(exportLoops.value) || 0);
+  const requestedNameLanguage = exportNameLanguage.value;
   exportButton.disabled = true;
   inspectExport.disabled = true;
+  exportFormat.disabled = true;
+  exportDestination.disabled = true;
   exportProgress.value = 0;
   try {
-    if (exportDestination.value === "folder" && !exportDirectoryHandle) {
+    if (requestedDestination === "folder" && !exportDirectoryHandle) {
       await chooseLocalExportDirectory();
     }
     const width = Math.max(
@@ -2459,7 +2478,7 @@ exportButton.addEventListener("click", async () => {
         frames,
         width,
         height,
-        Math.max(0, Number(exportLoops.value) || 0),
+        requestedLoops,
       );
     };
     const makeWebp = async (
@@ -2468,8 +2487,8 @@ exportButton.addEventListener("click", async () => {
       progressStart = 0,
       progressSpan = 1,
     ) => {
-      const targetBytes = optimizationTarget();
-      const advanced = exportFormat.value === "webp" && advancedBrowserOptimization.checked && targetBytes > 0;
+      const targetBytes = requestedTargetBytes;
+      const advanced = requestedFormat === "webp" && advancedBrowserOptimization.checked && targetBytes > 0;
       const makeFrames = (safeTimings) => safeTimings.map((timing) => ({
         delayMs: timing.delayMs,
         getImageData: async () => {
@@ -2480,7 +2499,7 @@ exportButton.addEventListener("click", async () => {
       if (!advanced) {
         const safeTimings = await ensureEndpoints(renderState, renderTimings, renderState.opacityMode.toUpperCase());
         return encodeAnimatedWebpToTarget(() => makeFrames(safeTimings), width, height, {
-          loops: Math.max(0, Number(exportLoops.value) || 0), targetBytes,
+          loops: requestedLoops, targetBytes,
           onProgress: (value) => { exportProgress.value = progressStart + progressSpan * value; },
         });
       }
@@ -2489,7 +2508,7 @@ exportButton.addEventListener("click", async () => {
         quality: { quality: .62, fps: .15, resolution: .23 },
         fps: { quality: .3, fps: .55, resolution: .15 },
         resolution: { quality: .3, fps: .15, resolution: .55 },
-      }[exportPriority.value];
+      }[requestedPriority];
       const candidates = [];
       for (const scale of [1, .9, .75, .67, .5]) for (const candidateFps of [...new Set([fps, Math.min(fps, 24), Math.min(fps, 20), Math.min(fps, 15)])]) for (const quality of [.88, .78, .68, .58, .48, .4]) {
         const score = weights.quality * quality + weights.fps * candidateFps / fps + weights.resolution * scale;
@@ -2504,7 +2523,7 @@ exportButton.addEventListener("click", async () => {
         const safeTimings = await ensureEndpoints(renderState, candidateTimings, renderState.opacityMode.toUpperCase());
         const bytes = await encodeAnimatedWebp(makeFrames(safeTimings), candidate.width, candidate.height, {
           quality: candidate.quality,
-          loops: Math.max(0, Number(exportLoops.value) || 0),
+          loops: requestedLoops,
           onProgress: (value) => { exportProgress.value = progressStart + progressSpan * (attempt + value) / searchCandidates.length; },
         });
         last = { bytes, ...candidate, attempts: attempt + 1, exceeded: bytes.length > targetBytes };
@@ -2513,8 +2532,8 @@ exportButton.addEventListener("click", async () => {
       return last;
     };
     let encodedMetadata = null;
-    if (exportFormat.value === "webp") {
-      exportResult.textContent = optimizationTarget()
+    if (requestedFormat === "webp") {
+      exportResult.textContent = requestedTargetBytes
         ? "ブラウザ内で容量を調整中…"
         : "ブラウザ内でWebPを書き出し中…";
       const encoded = await makeWebp(state, timings);
@@ -2528,7 +2547,7 @@ exportButton.addEventListener("click", async () => {
       };
       blob = new Blob([encoded.bytes], { type: "image/webp" });
       filename = `${safeName}.webp`;
-    } else if (exportFormat.value === "webm") {
+    } else if (requestedFormat === "webm") {
       const safeTimings = await ensureEndpoints(state, timings, "WebM");
       const payload = await makeEncoderPayload(
         context,
@@ -2537,24 +2556,26 @@ exportButton.addEventListener("click", async () => {
         fps,
         state,
         safeTimings,
+        requestedLoops,
       );
       exportProgress.value = 0.5;
-      exportResult.textContent = optimizationTarget()
+      exportResult.textContent = requestedTargetBytes
         ? "容量を探索中…（複数回エンコードします）"
         : "エンコード中…";
       const encoded = await requestLocalEncode(
         payload,
-        exportFormat.value,
-        optimizationTarget(),
+        requestedFormat,
+        requestedTargetBytes,
+        requestedPriority,
       );
       encodedMetadata = encoded.metadata;
       blob = encoded.blob;
-      filename = `${safeName}.${exportFormat.value}`;
-    } else if (exportFormat.value === "apng") {
+      filename = `${safeName}.${requestedFormat}`;
+    } else if (requestedFormat === "apng") {
       const bytes = await makeApng(state, timings);
       blob = new Blob([bytes], { type: "image/png" });
       filename = `${safeName}.png`;
-    } else if (["ccfset-apng", "ccfset-webp"].includes(exportFormat.value)) {
+    } else if (["ccfset-apng", "ccfset-webp"].includes(requestedFormat)) {
       const setOpacity = ccfSetOpacity();
       const fixedOpaque = state.forceOpaque || ["split", "stripe"].includes(state.kind);
       const outDuration =
@@ -2582,7 +2603,7 @@ exportButton.addEventListener("click", async () => {
       let outBytes;
       let inBytes;
       let animationExtension;
-      if (exportFormat.value === "ccfset-webp") {
+      if (requestedFormat === "ccfset-webp") {
         const outEncoded = await makeWebp(
           outState,
           frameTimesWithEndpoints(outDuration, fps, outState),
@@ -2620,16 +2641,22 @@ exportButton.addEventListener("click", async () => {
         );
         animationExtension = "png";
       }
-      renderTransitionFrame(context, width, height, outDuration, outState);
-      const holdBytes = await encodePng(
-        context.getImageData(0, 0, width, height),
-      );
+      const holdBytes = encodeSolidPng(state.color, setOpacity, 10, 10);
+      const holdColor = String(state.color || "#000000")
+        .replace(/^#/, "")
+        .toUpperCase()
+        .padStart(6, "0")
+        .slice(-6);
+      const holdOpacity = Math.round(setOpacity * 100);
+      const holdName = requestedNameLanguage === "ja"
+        ? `HOLD_${holdColor}_不透明度${holdOpacity}.png`
+        : `HOLD_${holdColor}_opacity${holdOpacity}.png`;
       outputFiles = [
         {
           name: `${safeName}_01_out.${animationExtension}`,
           data: outBytes,
         },
-        { name: `${safeName}_02_hold.png`, data: holdBytes },
+        { name: holdName, data: holdBytes },
         { name: `${safeName}_03_in.${animationExtension}`, data: inBytes },
       ];
       blob = new Blob([encodeZip(outputFiles)], { type: "application/zip" });
@@ -2669,7 +2696,7 @@ exportButton.addEventListener("click", async () => {
       ? ` / ⚠ ${[...new Set(endpointWarnings)].join("、")}`
       : " / 端点保証済み";
     const directFiles = outputFiles || [{ name: filename, data: blob }];
-    if (exportDestination.value === "folder") {
+    if (requestedDestination === "folder") {
       const savedNames = await saveFilesToDirectory(directFiles);
       const totalBytes = directFiles.reduce(
         (sum, file) => sum + (file.data.size ?? file.data.byteLength ?? file.data.length ?? 0),
@@ -2685,7 +2712,7 @@ exportButton.addEventListener("click", async () => {
       );
     } else {
       exportResult.textContent = `${filename} / ${(blob.size / 1024).toFixed(1)} KiB / ${actualWidth}×${actualHeight} / ${actualFps}fps / ${timings.length}基準フレーム${optimizationSummary}${endpointSummary}`;
-      inspectExport.disabled = !["apng", "webp"].includes(exportFormat.value);
+      inspectExport.disabled = !["apng", "webp"].includes(requestedFormat);
       downloadBlob(blob, filename);
       window.dispatchEvent(
         new CustomEvent("transition-export-complete", {
@@ -2697,6 +2724,9 @@ exportButton.addEventListener("click", async () => {
     exportResult.textContent = `書き出し失敗：${error.message}`;
   } finally {
     exportButton.disabled = false;
+    exportFormat.disabled = false;
+    exportDestination.disabled = false;
+    updateExportControls();
   }
 });
 

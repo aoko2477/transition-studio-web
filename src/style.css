@@ -385,3 +385,12 @@ button:disabled { opacity: .42; cursor: not-allowed; }
 :root[data-theme="light"] .section-heading span,
 :root[data-theme="light"] .metrics .safe,
 :root[data-theme="light"] .set-preview-grid figure { color: #126c75; }
+
+/* Geometry rendered by the shared Canvas renderer must not be duplicated by
+   the legacy CSS preview layer. The layer itself remains as the deterministic
+   preview clock. */
+.transition-layer[data-canvas-preview="true"]::before,
+.transition-layer[data-canvas-preview="true"]::after,
+.transition-layer[data-canvas-preview="true"] > i {
+  display: none !important;
+}

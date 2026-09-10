@@ -78,7 +78,7 @@ const base = {
   const { ctx, fills, gradients } = createContextSpy();
   renderTransitionFrame(ctx, 320, 180, 500, { ...base, forceOpaque: false, endOpacity: .45 });
   assert.equal(gradients.length, 1);
-  assert.equal(fills[0].alpha, .225, 'non-force-opaque wipe should still follow requested opacity interpolation');
+  assert.ok(Math.abs(fills[0].alpha - .225) < .0001, 'non-force-opaque wipe should still follow requested opacity interpolation');
 }
 
 console.log('angled wipe opacity + edge feather regression tests passed');

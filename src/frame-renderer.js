@@ -44,7 +44,9 @@ function fillRect(ctx, color, x, y, width, height, opacity = 1) {
 }
 
 function clipPolygon(points, normalX, normalY, boundary, keepGreater = false) {
-  const inside = ([x, y]) => keepGreater ? x * normalX + y * normalY >= boundary : x * normalX + y * normalY <= boundary;
+  const inside = ([x, y]) => keepGreater
+    ? x * normalX + y * normalY >= boundary
+    : x * normalX + y * normalY <= boundary;
   const output = [];
   for (let index = 0; index < points.length; index += 1) {
     const current = points[index];
@@ -55,7 +57,9 @@ function clipPolygon(points, normalX, normalY, boundary, keepGreater = false) {
       const dx = current[0] - previous[0];
       const dy = current[1] - previous[1];
       const denominator = dx * normalX + dy * normalY;
-      const ratio = denominator === 0 ? 0 : (boundary - previous[0] * normalX - previous[1] * normalY) / denominator;
+      const ratio = denominator === 0
+        ? 0
+        : (boundary - previous[0] * normalX - previous[1] * normalY) / denominator;
       output.push([previous[0] + dx * ratio, previous[1] + dy * ratio]);
     }
     if (currentInside) output.push(current);
@@ -70,47 +74,44 @@ function drawAngledWipe(ctx, width, height, coverage, angleDegrees, color, opaci
     return;
   }
   if (continueProgress !== null && continueProgress >= 1 - 1e-4) return;
-  const angle = ((Number(angleDegrees) || 0) - 0) * Math.PI / 180;
+  const angle = (Number(angleDegrees) || 0) * Math.PI / 180;
   const normalX = Math.cos(angle);
   const normalY = Math.sin(angle);
   const extent = Math.abs(normalX) * width / 2 + Math.abs(normalY) * height / 2;
-  let polygon = [[-width / 2, -height / 2], [width / 2, -height / 2], [width / 2, height / 2], [-width / 2, height / 2]];
-  if (continueProgress === null) {
-    const boundary = forwardExit ? -extent + extent * 2 * (1 - coverage) : -extent + extent * 2 * coverage;
-    polygon = clipPolygon(polygon, normalX, normalY, boundary, forwardExit);
-  } else {
-    const leading = -extent + extent * 2 * continueProgress;
-    polygon = clipPolygon(polygon, normalX, normalY, leading, true);
-    polygon = clipPolygon(polygon, normalX, normalY, leading + extent * 2);
-  }
-  if (polygon.length < 3) return;
-  const drawPolygon = (points, alpha) => {
-    if (points.length < 3) return;
-    ctx.save();
-    ctx.translate(width / 2, height / 2);
-    ctx.globalAlpha = clamp01(alpha);
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.moveTo(points[0][0], points[0][1]);
-    for (const point of points.slice(1)) ctx.lineTo(point[0], point[1]);
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
-  };
-  if (featherPx <= .01) {
-    drawPolygon(polygon, opacity);
-    return;
-  }
+  const source = [
+    [-width / 2, -height / 2],
+    [width / 2, -height / 2],
+    [width / 2, height / 2],
+    [-width / 2, height / 2],
+  ];
   const baseBoundary = continueProgress === null
     ? (forwardExit ? -extent + extent * 2 * (1 - coverage) : -extent + extent * 2 * coverage)
     : -extent + extent * 2 * continueProgress;
   const keepGreater = continueProgress !== null || forwardExit;
 
-  // Feather only the moving boundary. The previous layered-polygon approach
-  // divided opacity across overlapping shapes, so even the solid side of a
-  // 100%-opaque wipe converged to roughly 63% alpha. A gradient aligned to the
-  // wipe normal keeps the body at the requested opacity and changes alpha only
-  // within the feather band.
+  if (featherPx <= .01) {
+    let polygon = clipPolygon(source, normalX, normalY, baseBoundary, keepGreater);
+    if (continueProgress !== null) {
+      polygon = clipPolygon(polygon, normalX, normalY, baseBoundary + extent * 2);
+    }
+    if (polygon.length < 3) return;
+    ctx.save();
+    ctx.translate(width / 2, height / 2);
+    ctx.globalAlpha = clamp01(opacity);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(polygon[0][0], polygon[0][1]);
+    for (const point of polygon.slice(1)) ctx.lineTo(point[0], point[1]);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+    return;
+  }
+
+  // Important: do not emulate feather by stacking many low-alpha polygons.
+  // Overlapping alpha layers converge below 1.0, so a "100% opaque" wipe body
+  // becomes visibly translucent. Keep the body alpha untouched and encode only
+  // the moving boundary as a gradient.
   const startX = width / 2 - normalX * extent;
   const startY = height / 2 - normalY * extent;
   const endX = width / 2 + normalX * extent;
@@ -144,13 +145,15 @@ function fillSoftRect(ctx, color, x, y, width, height, opacity, featherPx = 0, m
     fillRect(ctx, color, x, y, width, height, opacity);
     return;
   }
-  const feather = Math.min(featherPx, movingEdge === 'left' || movingEdge === 'right' ? width : height);
+  const horizontal = movingEdge === 'left' || movingEdge === 'right';
+  const feather = Math.min(featherPx, horizontal ? width : height);
+  const ratio = Math.max(0, Math.min(.5, feather / (horizontal ? width : height)));
+
   ctx.save();
   ctx.globalAlpha = clamp01(opacity);
-  const gradient = movingEdge === 'left' || movingEdge === 'right'
+  const gradient = horizontal
     ? ctx.createLinearGradient(x, 0, x + width, 0)
     : ctx.createLinearGradient(0, y, 0, y + height);
-  const ratio = Math.max(0, Math.min(.5, feather / (movingEdge === 'left' || movingEdge === 'right' ? width : height)));
   if (movingEdge === 'left' || movingEdge === 'top') {
     gradient.addColorStop(0, 'transparent');
     gradient.addColorStop(ratio, color);
@@ -399,7 +402,12 @@ export function renderTransitionFrame(ctx, width, height, timeMs, state) {
     fillRect(ctx, state.color, 0, 0, width, height, geometryOpacity);
   } else if (state.kind === 'wipe') {
     if (Number.isFinite(state.wipeAngle)) {
-      drawAngledWipe(ctx, width, height, q, state.wipeAngle, state.color, geometryOpacity, continueExit ? motion.progress : null, motion.phase === 'out', edgeFeatherPx);
+      drawAngledWipe(
+        ctx, width, height, q, state.wipeAngle, state.color, geometryOpacity,
+        continueExit ? motion.progress : null,
+        motion.phase === 'out',
+        edgeFeatherPx,
+      );
       return;
     }
     let x = 0; let y = 0; let rectWidth = width; let rectHeight = height;
@@ -499,19 +507,21 @@ export function renderTransitionFrame(ctx, width, height, timeMs, state) {
       const exitProgress = continueExit ? clamp01((motion.progress - delay) / Math.max(.01, 1 - stripeStagger)) : 0;
       if (continueExit && exitProgress >= 1 - 1e-4) continue;
       if (horizontalMotion) {
-        const partWidth = width * stagger;
+        const travelWidth = width + edgeFeatherPx * 2;
+        const partWidth = travelWidth * stagger;
         const x = state.direction === 'right'
-          ? (motion.phase === 'out' ? width - partWidth : 0)
-          : (motion.phase === 'out' ? 0 : width - partWidth);
+          ? (motion.phase === 'out' ? -edgeFeatherPx + travelWidth - partWidth : -edgeFeatherPx)
+          : (motion.phase === 'out' ? -edgeFeatherPx : width + edgeFeatherPx - partWidth);
         const movingEdge = motion.phase === 'out'
           ? (state.direction === 'right' ? 'left' : 'right')
           : (state.direction === 'right' ? 'right' : 'left');
         fillSoftRect(ctx, state.color, x - 1, index * partSize - 1, partWidth + 2, partSize + 2, geometryOpacity, edgeFeatherPx, movingEdge);
       } else {
-        const partHeight = height * stagger;
+        const travelHeight = height + edgeFeatherPx * 2;
+        const partHeight = travelHeight * stagger;
         const y = state.direction === 'down'
-          ? (motion.phase === 'out' ? height - partHeight : 0)
-          : (motion.phase === 'out' ? 0 : height - partHeight);
+          ? (motion.phase === 'out' ? -edgeFeatherPx + travelHeight - partHeight : -edgeFeatherPx)
+          : (motion.phase === 'out' ? -edgeFeatherPx : height + edgeFeatherPx - partHeight);
         const movingEdge = motion.phase === 'out'
           ? (state.direction === 'down' ? 'top' : 'bottom')
           : (state.direction === 'down' ? 'bottom' : 'top');
