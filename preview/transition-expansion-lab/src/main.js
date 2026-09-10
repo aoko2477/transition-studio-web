@@ -2197,7 +2197,8 @@ function updateExportControls() {
   );
   const browserWebp = ["webp", "ccfset-webp"].includes(exportFormat.value);
   const fogWebp = exportFormat.value === "webp" && selectedCompoundRecipe()?.id?.startsWith("fog-");
-  const advancedWebp = exportFormat.value === "webp" && (advancedBrowserOptimization.checked || fogWebp);
+  const advancedWebp = exportFormat.value === "ccfset-webp" ||
+    (exportFormat.value === "webp" && (advancedBrowserOptimization.checked || fogWebp));
   ccfSetPreview.hidden = !["ccfset-apng", "ccfset-webp"].includes(exportFormat.value);
   integratedSetPreviewDock.hidden =
     exportDockToggle.getAttribute("aria-pressed") !== "true" || ccfSetPreview.hidden;
