@@ -1,0 +1,63 @@
+name: Bootstrap PR5 web sync branch
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: sync/main-pr5-web
+          fetch-depth: 0
+      - name: Sync approved shared files from source PR5
+        shell: bash
+        env:
+          SOURCE_SHA: d7406ca810f558b6170fcf89024fe8315dce1973
+        run: |
+          set -euo pipefail
+          files=(
+            index.html
+            LICENSE.md
+            src/ccf-export-lifecycle.js
+            src/frame-renderer.js
+            src/main.js
+            src/platform/runtime.js
+            src/media-encoders.js
+            src/media-inspector.js
+            src/procedural-fog.js
+            src/standalone-workflow.js
+            src/style.css
+            src/theme-guide.css
+            src/transition-recipes.js
+            src/ui-enhancements.js
+            src/webp-browser-encoder.js
+          )
+          for file in "${files[@]}"; do
+            mkdir -p "$(dirname "$file")"
+            curl --fail --silent --show-error --location \
+              "https://raw.githubusercontent.com/aoko2477/transition-studio/${SOURCE_SHA}/${file}" \
+              --output "$file"
+          done
+      - name: Check web snapshot
+        run: |
+          npm run check
+          npm test
+      - name: Commit synchronized snapshot
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html LICENSE.md src
+          if git diff --cached --quiet; then
+            echo "Already synchronized."
+            exit 0
+          fi
+          git commit -m "sync: align web shared files with source PR5"
+          git push origin HEAD:sync/main-pr5-web
