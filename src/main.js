@@ -1,3 +1,4 @@
+import { createWebPlatform, detectPlatform } from "./platform/runtime.js";
 import {
   frameTimes,
   frameTimesWithEndpoints,
@@ -12,6 +13,7 @@ import {
   seededUnit,
 } from "./transition-recipes.js";
 import { encodeAnimatedWebp, encodeAnimatedWebpToTarget } from "./webp-browser-encoder.js";
+import { exportCategoryFor, installStandaloneWorkflow, isReusableHoldName } from "./standalone-workflow.js";
 
 const app = document.querySelector("#app");
 
@@ -21,7 +23,7 @@ app.innerHTML = `
       <h1>Transition Studio</h1>
       <p>トランジション素材の作成・検査・容量最適化</p>
     </div>
-    <span id="editionBadge" class="badge">v0.2 Beta 1</span>
+    <span id="editionBadge" class="badge">v0.2 Beta 4</span>
   </header>
 
   <nav class="tabs" aria-label="主要機能">
@@ -51,16 +53,16 @@ app.innerHTML = `
               <optgroup label="多層">
                 <option value="multi-iris">多層アイリス</option>
               </optgroup>
-              <optgroup label="実験中">
-                <option value="compound-fogFill">霧・フィル β</option>
-                <option value="compound-fogSweep">霧・スイープ β</option>
-                <option value="compound-fogBloom">霧・ブルーム β</option>
+              <optgroup label="霧">
+                <option value="compound-fogFill">霧・フィル</option>
+                <option value="compound-fogSweep">霧・スイープ</option>
+                <option value="compound-fogBloom">霧・ブルーム</option>
               </optgroup>
             </select>
           </label>
           <p class="preset-summary" id="presetSummary"></p>
           <div id="fogControls" class="is-hidden">
-            <div class="warning"><strong>実験中：</strong>霧パターンは見た目・容量・速度を比較するための試作です。</div>
+            <div class="note"><strong>霧：</strong>広がり方の異なる3種類から選べます。</div>
             <blockquote class="fog-variant-guide"><strong>3種類の違い</strong><br><span>共通の霧ノイズを土台に、広がり方のアルゴリズムと初期パラメータの両方を変えています。同じ値に揃えても同じ見た目にはなりません。</span><br>フィル：ノイズを画面全体へ均等に広げる基本形<br>スイープ：ノイズに方向グラデーションを合成し、指定角度から流し込む<br>ブルーム：Seedで決まる複数地点から、重なりながら湧き広がる</blockquote>
             <label>霧の大きさ <input id="fogScale" type="range" min="1" max="8" step="0.1" value="3.4" /><output id="fogScaleValue">3.4</output></label>
             <label>霧の濃さ <input id="fogDensity" type="range" min="0" max="100" step="1" value="55" /><output id="fogDensityValue">55</output></label>
@@ -131,7 +133,7 @@ app.innerHTML = `
           </div>
           <label class="check-control" id="forceOpaqueControl"><input id="forceOpaque" type="checkbox" checked /> 図形を常に100%不透明で描画</label>
           <div class="obs-controls" id="obsControls">
-            <small id="obsFormatHint" class="mode-hint">現在はWebP・APNG・PNG連番で書き出します。OBS向けWebMはローカル版に実装予定です。「入り → 保持 → 抜け」の連続素材として利用できます。</small>
+            <small id="obsFormatHint" class="mode-hint">現在はWebP・APNG・PNG連番で書き出します。WebMはFFmpegが利用可能な環境で書き出せます。「入り → 保持 → 抜け」の連続素材として利用できます。</small>
             <div class="timing-inputs">
               <label>入り <input id="enterDuration" type="number" min="0.1" max="10" step="0.1" value="1.0" /></label>
               <label>黒幕保持 <input id="holdDuration" type="number" min="0" max="10" step="0.1" value="2.0" /></label>
@@ -261,7 +263,9 @@ app.innerHTML = `
             <div id="transitionLayer" class="transition-layer"></div>
           </div>
           <div class="preview-transport">
-            <button id="previewToggle">一時停止</button>
+            <div class="preview-transport-actions">
+              <button id="previewToggle">一時停止</button>
+            </div>
             <div class="preview-timeline" id="previewTimeline">
               <svg id="previewTimelineGraph" viewBox="0 0 1000 86" preserveAspectRatio="none" aria-label="入り、保持、抜けと透明度の推移">
                 <rect id="timelineEnterArea" class="timeline-area enter" y="0" height="86" />
@@ -321,10 +325,10 @@ app.innerHTML = `
       <div class="panel export-grid" id="exportGrid">
         <div id="exportSettings" class="export-settings">
           <h2>書き出し</h2>
-          <label title="用途に合う保存形式を選びます。CCFOLIAではOUT・HOLD・INをまとめた3素材セットがおすすめです。">形式 <select id="exportFormat"><option value="webp">Animated WebP</option><option value="ccfset-webp" selected>3素材セット・Animated WebP（ZIP）</option><option value="apng">APNG</option><option value="ccfset-apng">3素材セット・APNG（ZIP）</option><option value="pngzip">PNG連番（ZIP）</option><option id="webmOption" value="webm" disabled>WebM（ローカル版に実装予定）</option></select></label>
+          <label title="用途に合う保存形式を選びます。CCFOLIAではOUT・HOLD・INをまとめた3素材セットがおすすめです。">形式 <select id="exportFormat"><option value="webp">Animated WebP</option><option value="ccfset-webp" selected>3素材セット・Animated WebP（ZIP）</option><option value="apng">APNG</option><option value="ccfset-apng">3素材セット・APNG（ZIP）</option><option value="pngzip">PNG連番（ZIP）</option><option id="webmOption" value="webm" disabled>WebM（FFmpegを確認中）</option></select></label>
           <div id="formatCompatibility" class="note"></div>
           <div id="localOutputControl" class="local-output-control" hidden>
-            <label title="ローカル版では、ZIPやブラウザのダウンロードを介さず、選択したフォルダへファイルを直接保存できます。">保存方法
+          <label title="選択したフォルダへの直接保存と、ZIP化を選べます。">保存方法
               <select id="exportDestination">
                 <option value="download" selected>ブラウザからダウンロード</option>
                 <option value="folder">選択フォルダへ直接保存（ZIPなし）</option>
@@ -700,9 +704,9 @@ const presetDetails = {
   tile: ["タイル", "格子を順番に埋める"],
   radial: ["ラジアル", "時計回りに画面を覆う"],
   zoom: ["ズーム", "中央または外周を起点に拡大・収縮して覆う"],
-  "compound-fogFill": ["霧・フィル［実験］", "揺らぐ霧が画面全体へ広がり、最後は単色へ収束"],
-  "compound-fogSweep": ["霧・スイープ［実験］", "流れる霧が一方向から侵入して画面を覆う"],
-  "compound-fogBloom": ["霧・ブルーム［実験］", "複数地点から霧が湧き、重なりながら全面を覆う"],
+  "compound-fogFill": ["霧・フィル", "揺らぐ霧が画面全体へ広がり、最後は単色へ収束"],
+  "compound-fogSweep": ["霧・スイープ", "流れる霧が一方向から侵入して画面を覆う"],
+  "compound-fogBloom": ["霧・ブルーム", "複数地点から霧が湧き、重なりながら全面を覆う"],
   "compound-softFocusFade": [
     "ソフトフォーカス・フェード",
     "幕の濃度と柔らかな白い霞を重ねる",
@@ -1336,8 +1340,8 @@ function updateOpacityControls() {
         ? "INを確認中。3素材セットでは反転したOUTも同時に書き出します。"
         : document.documentElement.dataset.edition === "local" &&
             document.querySelector("#webmOption")?.disabled === false
-          ? "OBS向け：入り・全面被覆保持・抜けを1本で確認します。ローカル版ではWebMに書き出せます。"
-          : "OBS向け：入り・全面被覆保持・抜けを1本で確認します。WebMはローカル版に実装予定です。";
+          ? "OBS向け：入り・全面被覆保持・抜けを1本で確認し、WebMに書き出せます。"
+          : "OBS向け：入り・全面被覆保持・抜けを1本で確認します。WebMはFFmpegが利用可能な環境で書き出せます。";
   const customOpacityEnabled =
     !fixedOpaqueGeometry &&
     opacityMode.value !== "roundtrip" &&
@@ -2109,6 +2113,7 @@ let setPreviewAnimationFrame = 0;
 let lastExport = null;
 let exportDirectoryHandle = null;
 let localEditionAvailable = false;
+let platform = createWebPlatform();
 
 function ccfSetOpacity() {
   if (["split", "stripe"].includes(effectiveKind())) return 1;
@@ -2192,7 +2197,7 @@ function syncSetPreviewDirection() {
 }
 
 function updateExportControls() {
-  const optimizable = ["webp", "webm", "ccfset-webp"].includes(
+  const optimizable = ["webp", "ccfset-webp"].includes(
     exportFormat.value,
   );
   const browserWebp = ["webp", "ccfset-webp"].includes(exportFormat.value);
@@ -2220,7 +2225,7 @@ function updateExportControls() {
   const guides = {
     apng: "GitHub Pages・ブラウザ単体で書き出し可能。可逆圧縮のため画質スライダーはなく、現在は容量指定の対象外です。",
     webp: "Animated WebP。GitHub Pages・ブラウザ単体で書き出し可能。容量指定時は圧縮品質を段階的に調整します。",
-    webm: "VP9 alpha WebM。ローカル版で利用できます。ループはOBSなど再生側で設定します。",
+    webm: "VP9 alpha WebM。容量制限なしで、指定した解像度・FPSを維持して書き出します。ループはOBSなど再生側で設定します。",
     "ccfset-apng":
       "OUT（透明→幕）＋HOLD（固定PNG）＋IN（OUTの挙動反転）をZIP化。GitHub Pages対応。",
     "ccfset-webp":
@@ -2229,7 +2234,7 @@ function updateExportControls() {
       "各フレームをPNGでZIP化。GitHub Pages・ブラウザ単体で書き出し可能。",
   };
   document.querySelector("#formatCompatibility").textContent =
-    guides[exportFormat.value];
+    localEditionAvailable ? guides[exportFormat.value].replaceAll('ZIP化', '書き出し（保存方法で直接保存／ZIP化を選択）') : guides[exportFormat.value];
   const priorityGuides = {
     auto: "自動：圧縮品質・FPS・幅/高さをバランスよく探索します。",
     quality:
@@ -2252,23 +2257,33 @@ function updateExportControls() {
 async function detectLocalWebmSupport() {
   if (!webmOption) return;
   try {
-    const response = await fetch("/api/capabilities", { cache: "no-store" });
-    if (!response.ok) return;
-    const capabilities = await response.json();
+    const detected = await detectPlatform();
+    platform = detected.platform;
+    const capabilities = detected.capabilities;
+    if (capabilities.edition !== "local") return;
     localEditionAvailable = capabilities.edition === "local";
+    if (localEditionAvailable) installStandaloneWorkflow();
     if (localEditionAvailable) {
       document.documentElement.dataset.edition = "local";
-      editionBadge.textContent = "v0.2 Beta 1・ローカル版";
+      for (const option of exportFormat.options) option.textContent = option.textContent.replace('（ZIP）', '');
+      exportDestination.querySelector('[value="download"]').textContent = 'ZIP化（複数ファイルのみ）';
+      exportDestination.querySelector('[value="folder"]').textContent = '選択フォルダへ直接保存';
+      editionBadge.textContent = "v0.2 Beta 4";
     }
     const directFolderAvailable =
       localEditionAvailable &&
       capabilities.directFolder &&
       typeof window.showDirectoryPicker === "function";
     localOutputControl.hidden = !directFolderAvailable;
+    if (directFolderAvailable) {
+      exportDestination.value = "folder";
+      chooseExportDirectory.hidden = false;
+      exportDirectoryStatus.hidden = false;
+    }
     if (capabilities.ffmpeg && capabilities.formats?.includes("webm")) {
       webmOption.disabled = false;
       webmOption.textContent = "WebM（VP9 alpha・ローカル）";
-      obsFormatHint.textContent = "ローカル版ではWebP・APNG・PNG連番に加えて、OBS向けVP9 alpha WebMへ書き出せます。「入り → 保持 → 抜け」の連続素材として利用できます。";
+      obsFormatHint.textContent = "WebP・APNG・PNG連番に加えて、OBS向けVP9 alpha WebMへ書き出せます。「入り → 保持 → 抜け」の連続素材として利用できます。";
     } else if (localEditionAvailable) {
       webmOption.textContent = "WebM（FFmpegが見つかりません）";
       obsFormatHint.textContent = "WebMを利用するにはFFmpegをPATHへ追加してください。WebP・APNG・PNG連番はそのまま書き出せます。";
@@ -2280,12 +2295,16 @@ async function detectLocalWebmSupport() {
 
 async function chooseLocalExportDirectory() {
   if (!localEditionAvailable || typeof window.showDirectoryPicker !== "function") {
-    throw new Error("フォルダ直接保存はローカル版のChrome / Edgeで利用できます");
+    throw new Error("この環境ではフォルダ直接保存を利用できません");
   }
   exportDirectoryHandle = await window.showDirectoryPicker({ mode: "readwrite" });
   exportDirectoryStatus.textContent = `出力先：${exportDirectoryHandle.name}（同名は自動連番）`;
+  window.dispatchEvent(new CustomEvent("transition-library-root-selected", {
+    detail: { directoryHandle: exportDirectoryHandle },
+  }));
   return exportDirectoryHandle;
 }
+
 
 function numberedFileName(fileName, number) {
   if (number < 2) return fileName;
@@ -2308,16 +2327,40 @@ async function unusedFileName(directoryHandle, fileName) {
   throw new Error("同名ファイルの連番上限に達しました");
 }
 
-async function saveFilesToDirectory(files) {
+async function dataMatchesFile(fileHandle, data) {
+  const existing = new Uint8Array(await (await fileHandle.getFile()).arrayBuffer());
+  const incoming = data instanceof Blob
+    ? new Uint8Array(await data.arrayBuffer())
+    : ArrayBuffer.isView(data)
+      ? new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
+      : new Uint8Array(data);
+  if (existing.byteLength !== incoming.byteLength) return false;
+  return existing.every((value, index) => value === incoming[index]);
+}
+
+async function saveFilesToDirectory(files, category = "other") {
   const directoryHandle = exportDirectoryHandle || await chooseLocalExportDirectory();
+  const categoryHandle = await directoryHandle.getDirectoryHandle(category, { create: true });
   const savedNames = [];
   for (const file of files) {
-    const name = await unusedFileName(directoryHandle, file.name);
-    const handle = await directoryHandle.getFileHandle(name, { create: true });
+    let name;
+    if (isReusableHoldName(file.name)) {
+      try {
+        const existing = await categoryHandle.getFileHandle(file.name);
+        if (await dataMatchesFile(existing, file.data)) {
+          savedNames.push(`${category}/${file.name}`);
+          continue;
+        }
+      } catch (error) {
+        if (error.name !== "NotFoundError") throw error;
+      }
+    }
+    name = await unusedFileName(categoryHandle, file.name);
+    const handle = await categoryHandle.getFileHandle(name, { create: true });
     const writable = await handle.createWritable();
     await writable.write(file.data);
     await writable.close();
-    savedNames.push(name);
+    savedNames.push(`${category}/${name}`);
   }
   exportDirectoryStatus.textContent = `出力先：${directoryHandle.name}（${savedNames.length}ファイル保存済み）`;
   return savedNames;
@@ -2494,20 +2537,8 @@ exportName.addEventListener("input", () => {
 );
 refreshAutomaticFileName();
 
-function decodeMetadataHeader(value) {
-  if (!value) return null;
-  const normalized = value
-    .replace(/-/g, "+")
-    .replace(/_/g, "/")
-    .padEnd(Math.ceil(value.length / 4) * 4, "=");
-  return JSON.parse(
-    new TextDecoder().decode(
-      Uint8Array.from(atob(normalized), (character) => character.charCodeAt(0)),
-    ),
-  );
-}
-
 function optimizationTarget() {
+  if (exportFormat.value === "webm") return 0;
   if (exportTarget.value === "1mb") return 950 * 1024;
   if (exportTarget.value === "5mb") return Math.floor(4.8 * 1024 * 1024);
   if (exportTarget.value === "custom")
@@ -2559,29 +2590,15 @@ async function makeEncoderPayload(
 }
 
 async function requestLocalEncode(payload, format, target = 0, priority = "auto") {
-  const params = new URLSearchParams({
-    format,
-    targetBytes: String(target),
-    priority,
-  });
-  const response = await fetch(`/api/encode?${params}`, {
-    method: "POST",
-    headers: { "content-type": "application/zip" },
-    body: payload,
-  });
-  if (!response.ok) {
-    let message = `エンコードサーバーが応答しません（HTTP ${response.status}）`;
-    try {
-      message = (await response.json()).error || message;
-    } catch {}
-    throw new Error(`${message}。WebMを利用できるローカル版から再試行してください`);
+  try {
+    const result = await platform.encode({ payload, format, targetBytes: target, priority });
+    return {
+      blob: new Blob([result.data], { type: result.contentType }),
+      metadata: result.options,
+    };
+  } catch (error) {
+    throw new Error(`${error.message}。FFmpegを利用できる環境から再試行してください`);
   }
-  return {
-    blob: await response.blob(),
-    metadata: decodeMetadataHeader(
-      response.headers.get("x-transition-options"),
-    ),
-  };
 }
 
 exportButton.addEventListener("click", async () => {
@@ -2897,7 +2914,8 @@ exportButton.addEventListener("click", async () => {
     const actualWidth = encodedMetadata?.width || width;
     const actualHeight = encodedMetadata?.height || height;
     const actualFps = encodedMetadata?.fps || fps;
-    const optimizationSummary = encodedMetadata
+    const displayFps = Number(Number(actualFps).toFixed(2));
+    const optimizationSummary = encodedMetadata && requestedTargetBytes
       ? ` / ${encodedMetadata.attempts}回探索${encodedMetadata.exceeded ? " / 上限超過" : ""}`
       : "";
     const endpointSummary = endpointWarnings.length
@@ -2905,22 +2923,29 @@ exportButton.addEventListener("click", async () => {
       : " / 端点保証済み";
     const directFiles = outputFiles || [{ name: filename, data: blob }];
     if (requestedDestination === "folder") {
-      const savedNames = await saveFilesToDirectory(directFiles);
+      const category = exportCategoryFor({ kind: state.kind, recipeId: state.recipeId });
+      const savedNames = await saveFilesToDirectory(directFiles, category);
       const totalBytes = directFiles.reduce(
         (sum, file) => sum + (file.data.size ?? file.data.byteLength ?? file.data.length ?? 0),
         0,
       );
       lastExport = null;
       inspectExport.disabled = true;
-      exportResult.textContent = `${savedNames.length}ファイルを直接保存 / ${(totalBytes / 1024).toFixed(1)} KiB / ${actualWidth}×${actualHeight} / ${actualFps}fps / ${timings.length}基準フレーム${optimizationSummary}${endpointSummary}`;
+      exportResult.textContent = `${savedNames.length}ファイルを直接保存 / ${(totalBytes / 1024).toFixed(1)} KiB / ${actualWidth}×${actualHeight} / ${displayFps}fps / ${timings.length}基準フレーム${optimizationSummary}${endpointSummary}`;
       window.dispatchEvent(
         new CustomEvent("transition-export-complete", {
-          detail: { filenames: savedNames, directory: exportDirectoryHandle.name },
+          detail: { filenames: savedNames, directory: exportDirectoryHandle.name, directoryHandle: exportDirectoryHandle, category, duration: state.durationMs / 1000, recipe: state.recipeId || state.kind, color: state.color, width: actualWidth, height: actualHeight, fps: actualFps, format: requestedFormat },
         }),
       );
     } else {
-      exportResult.textContent = `${filename} / ${(blob.size / 1024).toFixed(1)} KiB / ${actualWidth}×${actualHeight} / ${actualFps}fps / ${timings.length}基準フレーム${optimizationSummary}${endpointSummary}`;
-      inspectExport.disabled = !["apng", "webp"].includes(requestedFormat);
+      if (localEditionAvailable && requestedDestination === "download" && directFiles.length > 1) {
+        const zipFiles = await Promise.all(directFiles.map(async file => ({ ...file, data: file.data instanceof Blob ? new Uint8Array(await file.data.arrayBuffer()) : file.data })));
+        blob = new Blob([encodeZip(zipFiles)], { type: "application/zip" });
+        if (!filename.endsWith('.zip')) filename += '.zip';
+        lastExport = { blob, filename };
+      }
+      exportResult.textContent = `${filename} / ${(blob.size / 1024).toFixed(1)} KiB / ${actualWidth}×${actualHeight} / ${displayFps}fps / ${timings.length}基準フレーム${optimizationSummary}${endpointSummary}`;
+      inspectExport.disabled = blob.type === 'application/zip' || !["apng", "webp"].includes(requestedFormat);
       downloadBlob(blob, filename);
       window.dispatchEvent(
         new CustomEvent("transition-export-complete", {
@@ -2930,6 +2955,7 @@ exportButton.addEventListener("click", async () => {
     }
   } catch (error) {
     exportResult.textContent = `書き出し失敗：${error.message}`;
+    window.dispatchEvent(new CustomEvent("transition-export-failed", { detail: { message: error.message } }));
   } finally {
     exportButton.disabled = false;
     exportFormat.disabled = false;
@@ -3070,6 +3096,12 @@ inspectDropZone.addEventListener("drop", (event) => {
     file.type ? file : new Blob([file], { type: inferredType }),
     file.name,
   );
+});
+window.addEventListener("transition-inspect-library-file", (event) => {
+  const file = event.detail?.file;
+  if (!file) return;
+  tabs.find((tab) => tab.dataset.view === "inspect")?.click();
+  inspectBlob(file, file.name || "library-transition");
 });
 inspectExport.addEventListener("click", () => {
   if (!lastExport) return;

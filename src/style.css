@@ -6,7 +6,7 @@
 }
 
 * { box-sizing: border-box; }
-[hidden] { display: none !important; }
+:root [hidden] { display: none !important; }
 body { margin: 0; min-width: 320px; min-height: 100vh; background: #111315; }
 button, select, input { font: inherit; }
 button, select, input[type="number"] { border: 1px solid #41464c; border-radius: 3px; }
@@ -14,6 +14,9 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
 h1, h2, h3, p { margin-top: 0; }
 
 .topbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
   height: 58px;
   display: flex;
   align-items: center;
@@ -26,7 +29,7 @@ h1, h2, h3, p { margin-top: 0; }
 .topbar p { margin: 2px 0 0; color: #858c94; font-size: 11px; }
 .badge { color: #899198; font: 11px ui-monospace, monospace; }
 
-.tabs { display: flex; height: 42px; padding: 0 22px; border-bottom: 1px solid #30343a; background: #181b1e; }
+.tabs { position: sticky; top: 58px; z-index: 100; display: flex; height: 42px; padding: 0 22px; border-bottom: 1px solid #30343a; background: #181b1e; }
 .tab { position: relative; padding: 0 18px; border: 0; background: transparent; color: #92999f; cursor: pointer; }
 .tab::after { content: ""; position: absolute; right: 18px; bottom: 0; left: 18px; height: 2px; background: transparent; }
 .tab:hover { color: #d5d8db; }
@@ -143,6 +146,7 @@ button:disabled { opacity: .42; cursor: not-allowed; }
 .compound-canvas { display: none; position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .compound-canvas.is-active { display: block; }
 .preview-transport { display: grid; grid-template-columns: auto minmax(180px, 1fr) 105px; gap: 10px; align-items: center; margin: 0 28px 14px; }
+.preview-transport-actions { display: flex; gap: 8px; align-items: stretch; }
 .preview-transport button { min-width: 94px; }
 .preview-transport output { color: #aab3ba; font: 10px ui-monospace, monospace; text-align: right; }
 .preview-timeline { min-width: 0; display: grid; gap: 3px; }
@@ -392,6 +396,34 @@ button:disabled { opacity: .42; cursor: not-allowed; }
 :root[data-theme="light"] .section-heading span,
 :root[data-theme="light"] .metrics .safe,
 :root[data-theme="light"] .set-preview-grid figure { color: #126c75; }
+
+.standalone-box { margin-top: 18px; padding: 12px; border: 1px solid #3f4d51; background: #171d20; }
+.standalone-box h3 { margin: 0 0 10px; }
+.queue-toolbar, .library-filters { display: flex; gap: 8px; margin: 10px 0; }
+.export-queue { display: grid; gap: 6px; padding: 0; list-style: none; }
+.export-queue li { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 8px; padding: 8px; background: #24282c; }
+.export-queue li[data-status="completed"] span { color: #72d7df; }
+.export-queue li[data-status="failed"] span { color: #e0b35d; }
+.library-panel { min-height: 70vh; }
+.library-groups { display: grid; gap: 22px; margin-top: 14px; }
+.library-group h3 { margin: 0 0 8px; text-transform: capitalize; }
+.library-auto-replay { width: fit-content; margin-top: 8px; }
+.library-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; margin-top: 14px; }
+.library-cards article { min-width: 0; display: grid; align-content: start; gap: 5px; padding: 12px; border: 1px solid #3f4d51; background: #171d20; }
+.library-cards article strong { min-width: 0; overflow-wrap: anywhere; }
+.library-preview { width: 100%; aspect-ratio: 16 / 9; overflow: hidden; background-color: #d8dde0; background-image: linear-gradient(45deg, #bfc6ca 25%, transparent 25%), linear-gradient(-45deg, #bfc6ca 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #bfc6ca 75%), linear-gradient(-45deg, transparent 75%, #bfc6ca 75%); background-size: 20px 20px; background-position: 0 0, 0 10px, 10px -10px, -10px 0; }
+.library-preview img, .library-preview video { display: block; width: 100%; height: 100%; object-fit: contain; cursor: pointer; }
+.library-cards span, .library-cards small { color: #a5adb4; }
+.library-card-actions { display: grid; grid-template-columns: 1fr auto; gap: 6px; }
+.library-card-actions button { min-width: 0; }
+:root[data-theme="light"] .standalone-box, :root[data-theme="light"] .library-cards article { border-color: #adbdc2; background: #f3f7f8; }
+:root[data-theme="light"] .export-queue li { border: 1px solid #b8c5c9; background: #e7eef0; color: #172126; }
+:root[data-theme="light"] .export-queue li[data-status="completed"] span { color: #126c75; }
+:root[data-theme="light"] .export-queue li[data-status="failed"] span { color: #805b12; }
+:root[data-theme="light"] .library-cards span,
+:root[data-theme="light"] .library-cards small { color: #516269; }
+.library-drag-help { padding: 9px 11px; border-left: 3px solid #72d7df; background: #20272a; }
+:root[data-theme="light"] .library-drag-help { border-left-color: #168a96; background: #e7eef0; color: #26363c; }
 
 /* Geometry rendered by the shared Canvas renderer must not be duplicated by
    the legacy CSS preview layer. The layer itself remains as the deterministic
