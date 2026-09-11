@@ -1,0 +1,48 @@
+name: Apply staged PR5 web sync
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: sync/main-pr5-web
+          fetch-depth: 0
+      - name: Apply source PR5 patches
+        shell: bash
+        run: |
+          set -euo pipefail
+          git apply --check .sync-pr5/license.patch
+          git apply --check .sync-pr5/style.patch
+          git apply --check .sync-pr5/main.patch
+          git apply .sync-pr5/license.patch
+          git apply .sync-pr5/style.patch
+          git apply .sync-pr5/main.patch
+          # Preserve the trailing newline from the source snapshot.
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/standalone-workflow.js')
+          data = p.read_bytes()
+          if not data.endswith(b'\n'):
+              p.write_bytes(data + b'\n')
+          PY
+          rm -rf .sync-pr5
+          rm -f .github/workflows/sync-main-pr5.yml
+      - name: Verify Web build
+        run: npm run check
+      - name: Commit synchronized Web snapshot
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "sync: align web shared files with source PR5"
+          git push origin HEAD:sync/main-pr5-web
