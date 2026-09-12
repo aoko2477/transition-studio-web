@@ -1,6 +1,6 @@
 {
   "name": "transition-studio-web",
-  "version": "0.2.0-beta.1",
+  "version": "0.2.0-beta.5",
   "private": true,
   "description": "Browser-based transition asset creator, inspector, exporter, and size optimizer.",
   "type": "module",

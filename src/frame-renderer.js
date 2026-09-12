@@ -1,4 +1,5 @@
 import { drawProceduralFog } from './procedural-fog.js';
+import { productionTransitionRegistry } from './transition-effects/production-registry.js';
 
 const clamp01 = (value) => Math.max(0, Math.min(1, value));
 const lerp = (from, to, progress) => from + (to - from) * progress;
@@ -328,6 +329,16 @@ function stripeOrderAt(index, count, pattern = 'linear') {
 function renderCompoundPreset(ctx, width, height, state, motion) {
   const opacity = state.forceOpaque ? 1 : motion.opacity;
   const q = motion.coverage;
+  const registered = productionTransitionRegistry.get(state.recipeId);
+  if (registered) {
+    registered.render(ctx, width, height, q, {
+      color: state.color,
+      opacity,
+      angle: state.wipeAngle,
+      count: state.count,
+    });
+    return;
+  }
   if (state.recipeId === 'soft-focus-fade') {
     fillRect(ctx, state.color, 0, 0, width, height, motion.opacity);
     ctx.save();

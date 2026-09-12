@@ -43,6 +43,16 @@ export function evaluateRecipe(recipe, timeMs) {
 }
 
 export const COMPOUND_RECIPES = Object.freeze({
+  slatWipe: {
+    version: 1, id: 'slat-wipe', name: 'ブラインドワイプ', durationMs: 1150, fps: 30, seed: 6105,
+    defaults: { angle: -10, count: 14 },
+    exportHints: { complexity: 'low', webpCost: 'medium', minimumRecommendedFps: 20 },
+    layers: [
+      { family: 'baseMask', primitive: 'slatWipe', window: [0, 1150], easing: 'linear' },
+      { family: 'secondary', primitive: 'slatStagger', window: [0, 920], easing: 'linear' },
+      { family: 'finish', primitive: 'exactCover', window: [920, 1150], easing: 'linear' },
+    ],
+  },
   softFocusFade: {
     version: 1, id: 'soft-focus-fade', name: 'ソフトフォーカス・フェード', durationMs: 1800, fps: 30, seed: 4101,
     exportHints: { complexity: 'low', webpCost: 'medium', minimumRecommendedFps: 20 },

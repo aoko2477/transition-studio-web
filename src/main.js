@@ -23,7 +23,7 @@ app.innerHTML = `
       <h1>Transition Studio</h1>
       <p>トランジション素材の作成・検査・容量最適化</p>
     </div>
-    <span id="editionBadge" class="badge">v0.2 Beta 4</span>
+    <span id="editionBadge" class="badge">v0.2 Beta 5</span>
   </header>
 
   <nav class="tabs" aria-label="主要機能">
@@ -57,6 +57,9 @@ app.innerHTML = `
                 <option value="compound-fogFill">霧・フィル</option>
                 <option value="compound-fogSweep">霧・スイープ</option>
                 <option value="compound-fogBloom">霧・ブルーム</option>
+              </optgroup>
+              <optgroup label="幾何・メカニカル">
+                <option value="compound-slatWipe">ブラインドワイプ</option>
               </optgroup>
             </select>
           </label>
@@ -590,6 +593,7 @@ const previewTimelineGraph = document.querySelector("#previewTimelineGraph");
 
 function placePrimaryControls() {
   let anchor = presetSummary;
+  const slatRecipe = selectedCompoundRecipe()?.id === "slat-wipe";
   const blinkControls = [
     blinkPatternControl,
     blinkBalanceControl,
@@ -612,9 +616,13 @@ function placePrimaryControls() {
     anchor.after(control);
     anchor = control;
   }
-  if (effectiveKind() === "wipe" && !selectedCompoundRecipe()) {
+  if ((effectiveKind() === "wipe" && !selectedCompoundRecipe()) || slatRecipe) {
     anchor.after(wipeAngleControl);
     anchor = wipeAngleControl;
+  }
+  if (slatRecipe) {
+    anchor.after(countControl);
+    anchor = countControl;
   }
   if (effectiveKind() === "iris" && !selectedCompoundRecipe()) {
     anchor.after(irisDirectionControl);
@@ -707,6 +715,7 @@ const presetDetails = {
   "compound-fogFill": ["霧・フィル", "揺らぐ霧が画面全体へ広がり、最後は単色へ収束"],
   "compound-fogSweep": ["霧・スイープ", "流れる霧が一方向から侵入して画面を覆う"],
   "compound-fogBloom": ["霧・ブルーム", "複数地点から霧が湧き、重なりながら全面を覆う"],
+  "compound-slatWipe": ["ブラインドワイプ", "角を起点に複数の帯が順番に伸びて画面を覆う"],
   "compound-softFocusFade": [
     "ソフトフォーカス・フェード",
     "幕の濃度と柔らかな白い霞を重ねる",
@@ -1058,7 +1067,7 @@ function renderCompoundFrame(timeMs) {
         ? `blur(${Math.sin(Math.PI * state.progress) * 8}px)`
         : "";
 
-  if (["soft-focus-fade", "ink-bloom", "slash-cut", "fog-fill", "fog-sweep", "fog-bloom"].includes(recipe.id)) {
+  if (["soft-focus-fade", "ink-bloom", "slash-cut", "fog-fill", "fog-sweep", "fog-bloom", "slat-wipe"].includes(recipe.id)) {
     stageBackdrop.style.transform = "";
     stageBackdrop.style.filter = "";
     const renderState = exportState();
@@ -1299,6 +1308,9 @@ function updateOpacityControls() {
     reveal: [100, 0],
   };
   const baseKind = effectiveKind();
+  const slatRecipe = selectedCompoundRecipe()?.id === "slat-wipe";
+  wipeAngle.min = slatRecipe ? "-180" : "0";
+  wipeAngle.max = slatRecipe ? "180" : "359";
   if (direction.dataset.forKind !== baseKind) {
     const definitions = baseKind === "split"
       ? [["vertical-center", "中央から上下へ"], ["vertical-edges", "上下から中央へ"], ["horizontal-center", "中央から左右へ"], ["horizontal-edges", "左右から中央へ"]]
@@ -1393,7 +1405,7 @@ function updateOpacityControls() {
   );
   countControl.classList.toggle(
     "is-hidden",
-    !["stripe", "tile"].includes(baseKind) || Boolean(selectedCompoundRecipe()),
+    !slatRecipe && (!["stripe", "tile"].includes(baseKind) || Boolean(selectedCompoundRecipe())),
   );
   stripeStaggerControl.classList.toggle(
     "is-hidden",
@@ -1408,7 +1420,7 @@ function updateOpacityControls() {
     baseKind !== "tile" || Boolean(selectedCompoundRecipe()),
   );
   directionControl.classList.toggle("is-hidden", !["split", "stripe"].includes(baseKind));
-  wipeAngleControl.classList.toggle("is-hidden", baseKind !== "wipe");
+  wipeAngleControl.classList.toggle("is-hidden", baseKind !== "wipe" && !slatRecipe);
   irisDirectionControl.classList.toggle("is-hidden", baseKind !== "iris");
   irisTimingControl.classList.toggle("is-hidden", !["iris", "multi-iris"].includes(baseKind));
   multiIrisControl.classList.toggle("is-hidden", baseKind !== "multi-iris");
@@ -1861,6 +1873,10 @@ kind.addEventListener("input", () => {
   if (recipe) {
     duration.value = (recipe.durationMs / 1000).toFixed(1);
     forceOpaque.checked = baseKind !== "fade";
+    if (recipe.id === "slat-wipe") {
+      wipeAngle.value = recipe.defaults?.angle ?? -10;
+      document.querySelector("#count").value = recipe.defaults?.count ?? 14;
+    }
     applyFogRecipeDefaults(recipe);
   }
   replay();
@@ -2268,7 +2284,7 @@ async function detectLocalWebmSupport() {
       for (const option of exportFormat.options) option.textContent = option.textContent.replace('（ZIP）', '');
       exportDestination.querySelector('[value="download"]').textContent = 'ZIP化（複数ファイルのみ）';
       exportDestination.querySelector('[value="folder"]').textContent = '選択フォルダへ直接保存';
-      editionBadge.textContent = "v0.2 Beta 4";
+      editionBadge.textContent = "v0.2 Beta 5";
     }
     const directFolderAvailable =
       localEditionAvailable &&
@@ -2441,6 +2457,7 @@ function buildAutomaticFileName() {
     iris: "アイリス", "multi-iris": "多層アイリス", stripe: "ストライプ",
     tile: "タイル", radial: "ラジアル", zoom: "ズーム",
     "fog-fill": "霧フィル", "fog-sweep": "霧スイープ", "fog-bloom": "霧ブルーム",
+    "slat-wipe": "ブラインドワイプ",
   };
   const valueName = (value, names) => japanese ? (names[value] || value) : value;
   const details = [];
